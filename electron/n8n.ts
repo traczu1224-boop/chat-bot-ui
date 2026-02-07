@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import * as os from 'node:os';
 import type { AskResult, SendQuestionPayload } from './types.js';
+import { WEBHOOK_TIMEOUT_MS } from './config.js';
 import { getEffectiveSettings, getOrCreateDeviceId } from './storage.js';
 
 export const isValidWebhookUrl = (value: string) => {
@@ -90,7 +91,7 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort('timeout'), 30000);
+  const timeout = setTimeout(() => controller.abort('timeout'), WEBHOOK_TIMEOUT_MS);
   if (options.signal) {
     options.signal.addEventListener('abort', () => controller.abort('user'), { once: true });
   }
