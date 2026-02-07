@@ -50,9 +50,17 @@ export const formatConversationTxt = (conversationId: string, messages: Message[
           const chunkPart = source.chunk !== undefined && source.chunk !== null ? `, chunk: ${source.chunk}` : '';
           const scorePart =
             source.score !== undefined && source.score !== null ? `, score: ${source.score}` : '';
-          const metaPart = chunkPart || scorePart ? ` (${[chunkPart, scorePart].filter(Boolean).join('').slice(2)})` : '';
+          const metaPart =
+            chunkPart || scorePart ? ` (${[chunkPart, scorePart].filter(Boolean).join('').slice(2)})` : '';
           const textPart = source.text ? `: ${source.text}` : '';
-          return `  - ${source.source}${metaPart}${textPart}`;
+          if (source.source) {
+            return `  - ${source.source}${metaPart}${textPart}`;
+          }
+          const legacySource = source as typeof source & { title?: string; url?: string; snippet?: string };
+          const legacyTitle = legacySource.title ?? legacySource.url ?? 'Source';
+          const legacyUrlPart = legacySource.url ? ` (${legacySource.url})` : '';
+          const legacySnippetPart = legacySource.snippet ? `: ${legacySource.snippet}` : '';
+          return `  - ${legacyTitle}${legacyUrlPart}${legacySnippetPart}`;
         })
         .join('\n');
       return `${base}\n${sources}`;
