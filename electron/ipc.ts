@@ -1,14 +1,14 @@
 import { app, dialog, ipcMain, shell } from 'electron';
+import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
-import { v4 as uuidv4 } from 'uuid';
-import type { ConversationPayload, Settings } from './types';
-import { askN8n, isValidWebhookUrl } from './n8n';
+import type { ConversationPayload, Settings } from './types.js';
+import { askN8n, isValidWebhookUrl } from './n8n.js';
 import {
   conversationExists,
   formatConversationTxt,
   readConversation,
   writeConversation
-} from './storageConversations';
+} from './storageConversations.js';
 import {
   areSettingsLocked,
   getConversationIndex,
@@ -20,8 +20,8 @@ import {
   saveSettings,
   setLastConversationId,
   upsertConversationIndex
-} from './storage';
-import { getConversationsDir, getConversationsStats } from './storageConversations';
+} from './storage.js';
+import { getConversationsDir, getConversationsStats } from './storageConversations.js';
 
 const ensureConversation = async (conversationId: string): Promise<ConversationPayload> => {
   const messages = await readConversation(conversationId);
@@ -74,7 +74,7 @@ export const registerIpcHandlers = () => {
       return { conversationId: lastConversationId, messages };
     }
 
-    const conversationId = uuidv4();
+    const conversationId = randomUUID();
     setLastConversationId(conversationId);
     const payload = await ensureConversation(conversationId);
     upsertConversationIndex({
@@ -86,7 +86,7 @@ export const registerIpcHandlers = () => {
   });
 
   ipcMain.handle('conversation:new', async () => {
-    const conversationId = uuidv4();
+    const conversationId = randomUUID();
     setLastConversationId(conversationId);
     const payload = await ensureConversation(conversationId);
     upsertConversationIndex({

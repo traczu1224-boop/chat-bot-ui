@@ -1,6 +1,6 @@
-import ElectronStore = require('electron-store');
-import { v4 as uuidv4 } from 'uuid';
-import type { Settings } from './types';
+import { randomUUID } from 'node:crypto';
+import ElectronStore from 'electron-store';
+import type { Settings } from './types.js';
 
 export type ConversationMeta = {
   id: string;
@@ -55,7 +55,7 @@ export const getOrCreateDeviceId = () => {
   if (existing) {
     return existing;
   }
-  const next = uuidv4();
+  const next = randomUUID();
   store.set('deviceId', next);
   return next;
 };

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, session } from 'electron';
 import * as path from 'node:path';
-import { registerIpcHandlers } from './ipc';
-import { getOrCreateDeviceId } from './storage';
+import { registerIpcHandlers } from './ipc.js';
+import { getOrCreateDeviceId } from './storage.js';
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
