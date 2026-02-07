@@ -43,6 +43,7 @@ const App = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const markdown = useMemo(() => {
     const renderer = new marked.Renderer();
@@ -261,6 +262,14 @@ const App = () => {
     setIsLoading(false);
     setIsTyping(false);
     setPendingRequestId(null);
+  };
+
+  const handlePromptSelect = (prompt: string) => {
+    setInput(prompt);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(prompt.length, prompt.length);
+    });
   };
 
   const handleRetry = async (message: Message) => {
@@ -594,10 +603,82 @@ const App = () => {
             </div>
           </div>
           {filteredMessages.length === 0 && (
-            <div className="rounded-3xl border border-dashed border-white/10 bg-white/5 p-8 text-center text-sm text-slate-400">
-              {messages.length === 0
-                ? 'Rozpocznij rozmowę z Company Assistant. Twoje wiadomości pojawią się po prawej, odpowiedzi po lewej.'
-                : 'Brak wyników wyszukiwania dla podanej frazy.'}
+            <div className="rounded-3xl border border-dashed border-white/10 bg-white/5 p-8 text-sm text-slate-300">
+              {messages.length === 0 ? (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-white">Witaj w Company Assistant</div>
+                    <p className="mt-2 text-sm text-slate-400">
+                      Aplikacja jest gotowa, ale zanim zaczniesz, skonfiguruj webhook i wybierz temat
+                      rozmowy.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-white/10 bg-base-900/40 p-4">
+                      <div className="text-xs uppercase tracking-[0.2em] text-slate-400">1. Ustawienia</div>
+                      <p className="mt-2 text-sm text-slate-300">
+                        Podaj adres webhooka n8n oraz opcjonalny token API, aby połączyć się z backendem.
+                      </p>
+                      <button
+                        type="button"
+                        className="mt-4 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-accent-400/50 hover:text-white"
+                        onClick={() => setShowSettings(true)}
+                      >
+                        Otwórz ustawienia
+                      </button>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-base-900/40 p-4">
+                      <div className="text-xs uppercase tracking-[0.2em] text-slate-400">2. Pierwsze pytanie</div>
+                      <p className="mt-2 text-sm text-slate-300">
+                        Wpisz pytanie w polu poniżej lub wybierz jedną z gotowych propozycji.
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {[
+                          'Podsumuj najważniejsze zadania na dziś.',
+                          'Stwórz szkic odpowiedzi dla klienta.',
+                          'Jakie są statusy projektów w tym tygodniu?'
+                        ].map((prompt) => (
+                          <button
+                            key={prompt}
+                            type="button"
+                            className="rounded-full border border-white/10 px-3 py-1 text-xs text-slate-300 hover:border-accent-400/50 hover:text-white"
+                            onClick={() => handlePromptSelect(prompt)}
+                          >
+                            {prompt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-base-900/40 p-4">
+                      <div className="text-xs uppercase tracking-[0.2em] text-slate-400">3. Wysyłka</div>
+                      <p className="mt-2 text-sm text-slate-300">
+                        Naciśnij Enter, aby wysłać wiadomość. W odpowiedzi zobaczysz źródła i możliwość
+                        kopiowania treści.
+                      </p>
+                      <button
+                        type="button"
+                        className="mt-4 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-accent-400/50 hover:text-white"
+                        onClick={handleNewConversation}
+                      >
+                        Utwórz rozmowę
+                      </button>
+                    </div>
+                  </div>
+                  {settings.webhookUrl ? (
+                    <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-100">
+                      Webhook skonfigurowany. Możesz od razu zacząć rozmowę.
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
+                      Brak webhooka. Ustaw URL w ustawieniach, aby aplikacja mogła pobierać odpowiedzi.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center text-sm text-slate-400">
+                  Brak wyników wyszukiwania dla podanej frazy.
+                </div>
+              )}
             </div>
           )}
           {filteredMessages.map((message) => (
@@ -678,6 +759,7 @@ const App = () => {
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
               rows={3}
+              ref={inputRef}
             />
             <div className="mt-2 text-[11px] text-slate-500">
               Enter: wyślij · Shift+Enter: nowa linia · Ctrl/Cmd+Enter: wyślij
