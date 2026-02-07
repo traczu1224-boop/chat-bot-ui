@@ -8,7 +8,8 @@ Desktopowa aplikacja Company Assistant (Electron + TypeScript + React + Vite).
 2. Wpisz **Webhook URL** (musi zaczynać się od `http://` lub `https://`). Dla n8n używaj `http://127.0.0.1:5678/webhook/agent` (nie `/webhook-test/agent`).
 3. (Opcjonalnie) Wpisz **API Token** – jeśli pole jest puste, nagłówek `Authorization` nie będzie wysyłany.
 4. (Opcjonalnie) Uzupełnij **Nazwa użytkownika**.
-5. Zapisz ustawienia – zostaną trwale zapisane lokalnie.
+5. (Opcjonalnie) Ustaw `N8N_WEBHOOK_TIMEOUT_MS` (np. `120000`) – kontroluje timeout klienta webhooka.
+6. Zapisz ustawienia – zostaną trwale zapisane lokalnie.
 
 > ⚠️ Token API jest przechowywany lokalnie w `electron-store`. Rozważ użycie mechanizmu systemowego (np. keychain) w środowiskach produkcyjnych.
 
@@ -85,6 +86,7 @@ Konwersacje są zapisywane w katalogu:
 - `USE_MOCK=true` – uruchamia tryb mock bez wywołań HTTP.
 - `COMPANY_ASSISTANT_WEBHOOK_URL` – wymusza webhook URL (UI jest tylko do odczytu).
 - `SETTINGS_LOCKED=true` – blokuje edycję ustawień w aplikacji.
+- `N8N_WEBHOOK_TIMEOUT_MS=120000` – kontroluje timeout klienta webhooka.
 
 ## USE_MOCK=true (bez n8n)
 
