@@ -107,7 +107,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://ollama:11434/api/generate',\n  headers: { 'content-type': 'application/json' },\n  body: {\n    model: 'qwen2.5:7b',\n    system: 'Odpowiadaj po polsku wyłącznie na podstawie kontekstu. Jeśli brak danych, napisz czego brakuje i nie zmyślaj.',\n    prompt: `Pytanie: ${$json.message}\\n\\nKontekst:\\n${$json.context}`,\n    stream: false\n  },\n  json: true\n});\n\nreturn { json: { ...$json, answer: response?.response ?? '' } };\n"
+        "jsCode": "const response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://ollama:11434/api/generate',\n  headers: { 'content-type': 'application/json' },\n  body: {\n    model: 'llama3.2:3b',\n    system: 'Odpowiadaj po polsku wyłącznie na podstawie kontekstu. Jeśli brak danych, napisz czego brakuje i nie zmyślaj.',\n    prompt: `Pytanie: ${$json.message}\\n\\nKontekst:\\n${$json.context}`,\n    stream: false\n  },\n  json: true\n});\n\nreturn { json: { ...$json, answer: response?.response ?? '' } };\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
