@@ -5,6 +5,7 @@ import type { Message } from './types.js';
 
 export const getConversationsDir = () => path.join(app.getPath('userData'), 'conversations');
 export const getTrashDir = () => path.join(getConversationsDir(), '.trash');
+const TRASH_TTL_MS = 10_000;
 
 const ensureConversationsDir = async () => {
   await fs.mkdir(getConversationsDir(), { recursive: true });
@@ -61,6 +62,8 @@ export const softDeleteConversation = async (conversationId: string) => {
   try {
     await removeFileIfExists(trashPath);
     await fs.rename(filePath, trashPath);
+    const now = new Date();
+    await fs.utimes(trashPath, now, now);
     return true;
   } catch {
     return false;
@@ -86,6 +89,31 @@ export const deleteConversation = async (conversationId: string) => {
   await removeFileIfExists(filePath);
   await removeFileIfExists(trashPath);
   return true;
+};
+
+export const cleanupExpiredTrash = async () => {
+  await ensureTrashDir();
+  try {
+    const entries = await fs.readdir(getTrashDir(), { withFileTypes: true });
+    const now = Date.now();
+    await Promise.all(
+      entries
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+        .map(async (entry) => {
+          const filePath = path.join(getTrashDir(), entry.name);
+          try {
+            const stats = await fs.stat(filePath);
+            if (now - stats.mtimeMs >= TRASH_TTL_MS) {
+              await removeFileIfExists(filePath);
+            }
+          } catch {
+            // ignore
+          }
+        })
+    );
+  } catch {
+    // ignore
+  }
 };
 
 export const formatConversationTxt = (conversationId: string, messages: Message[]) => {

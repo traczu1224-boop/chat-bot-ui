@@ -2,6 +2,7 @@ import { app, BrowserWindow, session } from 'electron';
 import * as path from 'node:path';
 import { registerIpcHandlers } from './ipc.js';
 import { getOrCreateDeviceId } from './storage.js';
+import { cleanupExpiredTrash } from './storageConversations.js';
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 
@@ -39,7 +40,7 @@ const createWindow = () => {
   }
 };
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   console.info('[main] uruchamianie aplikacji');
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? 'http://localhost:5173';
@@ -70,6 +71,7 @@ app.whenReady().then(() => {
   });
 
   getOrCreateDeviceId();
+  await cleanupExpiredTrash();
   registerIpcHandlers();
   createWindow();
 
