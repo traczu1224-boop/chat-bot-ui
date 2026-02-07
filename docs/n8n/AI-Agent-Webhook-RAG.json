@@ -43,7 +43,7 @@
         "conditions": {
           "boolean": [
             {
-              "value1": "={{ (() => {\n  const h = $json.headers || $json.header || $json.request?.headers || {};\n  const auth = String(h.authorization || h.Authorization || '').trim();\n  // Na start: pozwól działać bez tokena, a token akceptuj jako Bearer 1234\n  return auth === '' || auth === 'Bearer 1234';\n})() }}",
+              "value1": "={{ (() => {\n  const h = $json.headers || $json.header || $json.request?.headers || {};\n  const auth = String(h.authorization || h.Authorization || '').trim();\n  return auth === 'Bearer 1234';\n})() }}",
               "operation": "isTrue"
             }
           ]

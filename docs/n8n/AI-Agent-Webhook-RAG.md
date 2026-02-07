@@ -157,8 +157,9 @@ curl.exe -i -X POST "http://127.0.0.1:5678/webhook/agent" `
 
 - **CORS / „Brak połączenia” w UI** → upewnij się, że masz ENV:
   `N8N_CORS_ENABLED=true`, `N8N_CORS_ALLOW_ORIGIN=*`, `N8N_CORS_ALLOW_METHODS=GET,POST,OPTIONS`, `N8N_CORS_ALLOW_HEADERS=Content-Type,Authorization`.
+- **UI wysyła `question`, a nie `message`** → workflow mapuje `question → message` (node “Prepare Request”).
 - **Używasz `/webhook-test`** → to działa tylko w trybie „Execute workflow”. Produkcyjny URL to **`/webhook/agent`**.
-- **BOM w JSON (Windows)** → użyj zapisu bez BOM i `--data-binary` (sekcja 8).
+- **BOM w JSON (Windows/PowerShell)** → zapisuj plik bez BOM, np. `WriteAllText(..., new UTF8Encoding(false))`, i używaj `--data-binary` (sekcja 8).
 - **Brak wyników z Qdrant** → przy `score_threshold=0.6` krótkie pytania typu „e/halo” mogą dać 0 hitów.
 - **Kolekcja Qdrant nie istnieje lub jest pusta**:
   ```bash
