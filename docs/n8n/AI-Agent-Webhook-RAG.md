@@ -115,6 +115,17 @@ docker exec -it n8n sh -lc "wget -qO- http://qdrant:6333/collections"
 6. **Otwórz Chat Bot UI**, wpisz webhook URL i wyślij wiadomość.
 7. **Sprawdź w UI sekcję „Źródła”** pod odpowiedzią.
 
+## 7a) Scenariusz testowy: opóźnienie w n8n i weryfikacja timeoutu UI
+
+1. **Dodaj opóźnienie w workflow**:
+   - W n8n dodaj node **Wait** (Tryb: *Delay*) między webhookiem a dalszymi node'ami.
+   - Ustaw opóźnienie na **2 minuty** (120 s) lub więcej.
+2. **Zapisz i aktywuj workflow**.
+3. **Wyślij wiadomość z Chat Bot UI** i zmierz czas oczekiwania.
+4. **Sprawdź rezultat w UI**:
+   - UI powinno **czekać co najmniej 120 s**.
+   - Jeśli timeout wystąpi, komunikat powinien brzmieć: **„Przekroczono czas oczekiwania…”**, a **nie** „Brak połączenia z siecią”.
+
 ## 8) Testy w Windows PowerShell (bez BOM + token)
 
 1. **Zapisz JSON bez BOM (UTF-8 bez BOM)**:
@@ -157,6 +168,7 @@ curl.exe -i -X POST "http://127.0.0.1:5678/webhook/agent" `
 
 - **CORS / „Brak połączenia” w UI** → upewnij się, że masz ENV:
   `N8N_CORS_ENABLED=true`, `N8N_CORS_ALLOW_ORIGIN=*`, `N8N_CORS_ALLOW_METHODS=GET,POST,OPTIONS`, `N8N_CORS_ALLOW_HEADERS=Content-Type,Authorization`.
+- **Timeout** → po przekroczeniu czasu oczekiwania UI powinno pokazać **„Przekroczono czas oczekiwania…”**, a nie „Brak połączenia z siecią”. Zobacz scenariusz testowy w sekcji 7a.
 - **UI wysyła `question`, a nie `message`** → workflow mapuje `question → message` (node “Prepare Request”).
 - **Używasz `/webhook-test`** → to działa tylko w trybie „Execute workflow”. Produkcyjny URL to **`/webhook/agent`**.
 - **BOM w JSON (Windows/PowerShell)** → zapisuj plik bez BOM, np. `WriteAllText(..., new UTF8Encoding(false))`, i używaj `--data-binary` (sekcja 8).
