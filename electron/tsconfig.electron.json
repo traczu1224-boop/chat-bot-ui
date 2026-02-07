@@ -3,8 +3,10 @@
   "compilerOptions": {
     "outDir": "../dist-electron",
     "rootDir": ".",
-    "module": "ES2022",
+    "module": "CommonJS",
     "moduleResolution": "Node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "types": ["node"],
     "sourceMap": true,
     "noEmitOnError": true

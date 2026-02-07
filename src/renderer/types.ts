@@ -12,6 +12,11 @@ export type Message = {
   content: string;
   createdAt: string;
   sources?: SourceItem[];
+  isError?: boolean;
+  retryPayload?: {
+    question: string;
+    conversationId: string;
+  };
 };
 
 export type Settings = {
@@ -19,6 +24,18 @@ export type Settings = {
   apiToken: string;
   username: string;
   theme: 'dark' | 'light' | 'system';
+};
+
+export type SettingsState = {
+  settings: Settings;
+  locked: boolean;
+  webhookLocked: boolean;
+};
+
+export type ConversationMeta = {
+  id: string;
+  title: string;
+  updatedAt: string;
 };
 
 export type ConversationPayload = {
@@ -35,4 +52,5 @@ export type AskResult = {
 export type ClientInfo = {
   app_version: string;
   platform: string;
+  userDataPath: string;
 };

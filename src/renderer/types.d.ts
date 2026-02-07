@@ -1,11 +1,18 @@
-import type { AskResult, ClientInfo, ConversationPayload, Settings } from './types';
+import type {
+  AskResult,
+  ClientInfo,
+  ConversationMeta,
+  ConversationPayload,
+  Settings,
+  SettingsState
+} from './types';
 
 declare global {
   interface Window {
     companyAssistant: {
       settings: {
-        get: () => Promise<Settings>;
-        save: (settings: Settings) => Promise<void>;
+        get: () => Promise<SettingsState>;
+        save: (settings: Settings) => Promise<Settings>;
       };
       device: {
         getOrCreate: () => Promise<string>;
@@ -16,15 +23,20 @@ declare global {
         new: () => Promise<ConversationPayload>;
         save: (payload: ConversationPayload) => Promise<{ saved: boolean }>;
         exportTxt: (conversationId: string) => Promise<{ saved: boolean }>;
+        list: () => Promise<ConversationMeta[]>;
       };
       n8n: {
-        ask: (payload: { question: string; conversationId: string }) => Promise<AskResult>;
+        ask: (payload: { question: string; conversationId: string; requestId: string }) => Promise<AskResult>;
+        cancel: (requestId: string) => Promise<{ canceled: boolean }>;
       };
       shell: {
         openExternal: (url: string) => Promise<void>;
       };
       client: {
         getInfo: () => Promise<ClientInfo>;
+      };
+      diagnostics: {
+        export: () => Promise<{ saved: boolean }>;
       };
     };
   }

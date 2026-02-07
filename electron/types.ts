@@ -12,6 +12,11 @@ export type Message = {
   content: string;
   createdAt: string;
   sources?: SourceItem[];
+  isError?: boolean;
+  retryPayload?: {
+    question: string;
+    conversationId: string;
+  };
 };
 
 export type ConversationPayload = {
@@ -24,6 +29,18 @@ export type Settings = {
   apiToken: string;
   username: string;
   theme: 'dark' | 'light' | 'system';
+};
+
+export type SettingsState = {
+  settings: Settings;
+  locked: boolean;
+  webhookLocked: boolean;
+};
+
+export type ConversationMeta = {
+  id: string;
+  title: string;
+  updatedAt: string;
 };
 
 export type SendQuestionPayload = {
