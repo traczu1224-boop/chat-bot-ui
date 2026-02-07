@@ -18,14 +18,10 @@ services:
 
 > Po zmianie pliku `docker-compose.yml` zrób restart kontenerów: `docker compose up -d`.
 
-## 2) Ustaw zmienne w n8n (Variables)
+## 2) Prosta autoryzacja po nagłówku Authorization
 
-W n8n przejdź do **Settings → Variables** i dodaj:
-
-- `CHATBOT_UI_TOKEN` – opcjonalny, jeśli chcesz weryfikować token z UI.
-- `REQUIRE_AUTH` – ustaw `true`, aby wymusić autoryzację nagłówkiem `Authorization: Bearer <TOKEN>`.
-
-Gdy `REQUIRE_AUTH=false`, token jest opcjonalny i można go pominąć.
+Workflow ma wbudowaną, prostą kontrolę dostępu: przepuszcza tylko, gdy nagłówek jest dokładnie
+`Authorization: Bearer 1234`. Dzięki temu działa też w n8n Community bez Variables/Environments.
 
 ## 3) Import workflow do n8n
 
@@ -97,9 +93,9 @@ Jeśli masz inne nazwy lub porty, zmień je w node'ach workflow:
      -H 'Content-Type: application/json' \
      -d '{"message":"Jak hotel powinien reagować na reklamację hałasu?"}'
    ```
-   - Jeśli masz token, dodaj nagłówek:
+   - Dodaj nagłówek autoryzacji:
      ```bash
-     -H 'Authorization: Bearer TWOJ_TOKEN'
+     -H 'Authorization: Bearer 1234'
      ```
 5. **Sprawdź odpowiedź** – powinna zawierać `answer` i tablicę `sources`.
 6. **Otwórz Chat Bot UI**, wpisz webhook URL i wyślij wiadomość.
@@ -119,18 +115,29 @@ Jeśli masz inne nazwy lub porty, zmień je w node'ach workflow:
      -H \"Content-Type: application/json\" `
      --data-binary \"@$path\"
    ```
-3. **Test z tokenem (REQUIRE_AUTH=true)**:
+3. **Test z tokenem**:
    ```powershell
    curl.exe -X POST http://127.0.0.1:5678/webhook/agent `
      -H \"Content-Type: application/json\" `
-     -H \"Authorization: Bearer TWOJ_TOKEN\" `
+     -H \"Authorization: Bearer 1234\" `
      --data-binary \"@$path\"
    ```
-4. **Test bez tokena (REQUIRE_AUTH=true)** – powinno zwrócić 401:
+4. **Test bez tokena** – powinno zwrócić 401:
    ```powershell
    curl.exe -X POST http://127.0.0.1:5678/webhook/agent `
      -H \"Content-Type: application/json\" `
      --data-binary \"@$path\"
    ```
+
+## 9) Szybki test PowerShell z request.json
+
+```powershell
+curl.exe -i -X POST "http://127.0.0.1:5678/webhook/agent" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer 1234" `
+  --data-binary "@request.json"
+```
+
+**Oczekiwane:** brak `Unauthorized`, workflow idzie do embeddings/qdrant/generate i zwraca `{answer,...}`.
 
 Gotowe! Jeśli widzisz odpowiedź i źródła, integracja działa end-to-end.
