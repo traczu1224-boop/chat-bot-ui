@@ -3,8 +3,9 @@
   "compilerOptions": {
     "outDir": "../dist-electron",
     "rootDir": ".",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "CommonJS",
+    "target": "ES2022",
+    "moduleResolution": "Node",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "types": ["node"],

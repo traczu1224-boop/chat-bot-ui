@@ -42,17 +42,29 @@ const createWindow = () => {
 app.whenReady().then(() => {
   console.info('[main] uruchamianie aplikacji');
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
+    const devServerUrl = process.env.VITE_DEV_SERVER_URL ?? 'http://localhost:5173';
+    const csp = isDev
+      ? [
+          "default-src 'self'",
+          `script-src 'self' ${devServerUrl} 'unsafe-eval' 'unsafe-inline'`,
+          `style-src 'self' 'unsafe-inline' ${devServerUrl}`,
+          "img-src 'self' data: blob:",
+          `connect-src 'self' ${devServerUrl} ws://localhost:5173`,
+          "frame-src 'none'"
+        ]
+      : [
           "default-src 'self'",
           "script-src 'self'",
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data:",
-          "connect-src 'self' http: https:",
+          "connect-src 'self'",
           "frame-src 'none'"
-        ].join('; ')
+        ];
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp.join('; ')]
       }
     });
   });
