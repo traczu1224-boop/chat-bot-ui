@@ -4,6 +4,7 @@ import path from 'node:path';
 
 export default defineConfig({
   root: path.resolve(__dirname, 'src/renderer'),
+  base: './',
   plugins: [react()],
   css: {
     postcss: path.resolve(__dirname, 'postcss.config.cjs')
