@@ -444,25 +444,24 @@ const App = () => {
       <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-slate-200/80">
         <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">Źródła</div>
         <ul className="space-y-2">
-          {sources.map((source, index) => (
-            <li key={`${source.title}-${index}`} className="space-y-1">
-              {source.url ? (
-                <button
-                  type="button"
-                  className="flex items-center gap-2 text-left text-accent-400 hover:text-accent-500"
-                  onClick={() => window.companyAssistant.shell.openExternal(source.url!)}
-                >
-                  <span>↗</span>
-                  <span className="underline decoration-dotted underline-offset-4">
-                    {source.title}
-                  </span>
-                </button>
-              ) : (
-                <span className="text-slate-200">{source.title}</span>
-              )}
-              {source.snippet && <div className="text-slate-400">{source.snippet}</div>}
-            </li>
-          ))}
+          {sources.map((source, index) => {
+            const snippet = source.text?.slice(0, 200);
+            const trimmedSnippet = snippet && source.text && source.text.length > 200 ? `${snippet}…` : snippet;
+            return (
+              <li key={`${source.source}-${index}`} className="space-y-1">
+                <div className="text-slate-200">{source.source}</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
+                  {source.chunk !== undefined && source.chunk !== null && (
+                    <span>chunk: {source.chunk}</span>
+                  )}
+                  {source.score !== undefined && source.score !== null && (
+                    <span>score: {Number(source.score).toFixed(3)}</span>
+                  )}
+                </div>
+                {trimmedSnippet && <div className="text-slate-400">{trimmedSnippet}</div>}
+              </li>
+            );
+          })}
         </ul>
       </div>
     );

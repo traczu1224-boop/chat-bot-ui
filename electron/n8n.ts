@@ -37,14 +37,16 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
       answer: 'To jest przykładowa odpowiedź z trybu mock. Możesz przetestować UI bez n8n.',
       sources: [
         {
-          title: 'Dokumentacja firmowa',
-          url: 'https://example.com/docs',
-          snippet: 'Przykładowy fragment źródła do podglądu w UI.'
+          source: 'Dokumentacja firmowa',
+          chunk: 1,
+          score: 0.92,
+          text: 'Przykładowy fragment źródła do podglądu w UI.'
         },
         {
-          title: 'FAQ IT',
-          url: 'https://example.com/faq',
-          snippet: 'Krótki opis źródła, które można otworzyć w przeglądarce.'
+          source: 'FAQ IT',
+          chunk: 2,
+          score: 0.87,
+          text: 'Krótki opis źródła, które można otworzyć w przeglądarce.'
         }
       ]
     };
@@ -77,7 +79,7 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
             ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
           body: JSON.stringify({
-            question: payload.question,
+            message: payload.question,
             conversation_id: payload.conversationId,
             user: {
               username,
@@ -98,6 +100,11 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
         };
 
         if (!response.ok) {
+          if (response.status === 401) {
+            return {
+              error: 'Błędny token API. Sprawdź wartość w ustawieniach aplikacji.'
+            };
+          }
           if (response.status >= 500 && attempt < retryDelays.length) {
             await sleep(retryDelays[attempt]);
             continue;

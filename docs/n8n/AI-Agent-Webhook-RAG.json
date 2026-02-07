@@ -1,0 +1,255 @@
+{
+  "name": "AI Agent Webhook RAG",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        0
+      ],
+      "id": "webhook-agent",
+      "name": "Webhook /agent"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? {};\nconst headers = $json.headers ?? {};\nconst message = (body.message ?? body.question ?? body.input ?? '').toString().trim();\n\nif (!message) {\n  throw new Error('Brak pola message/question/input w body.');\n}\n\nconst requireAuth = (process.env.REQUIRE_AUTH ?? 'false').toLowerCase() === 'true';\nconst token = process.env.CHATBOT_UI_TOKEN;\nconst authHeader = headers.authorization ?? headers.Authorization;\n\nlet isAuthorized = true;\n\nif (authHeader) {\n  if (token) {\n    isAuthorized = authHeader === `Bearer ${token}`;\n  } else {\n    isAuthorized = !requireAuth;\n  }\n} else {\n  isAuthorized = !requireAuth;\n}\n\nif (!isAuthorized) {\n  return [{ json: { status: 401, error: 'Unauthorized' } }];\n}\n\nreturn [{ json: { message } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "auth-and-extract",
+      "name": "Auth + Extract"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.status}}",
+              "operation": "equal",
+              "value2": 401
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -380,
+        0
+      ],
+      "id": "if-unauthorized",
+      "name": "401?"
+    },
+    {
+      "parameters": {
+        "responseCode": 401,
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        -140
+      ],
+      "id": "respond-401",
+      "name": "Respond 401"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://ollama:11434/api/embeddings',\n  headers: { 'content-type': 'application/json' },\n  body: {\n    model: 'nomic-embed-text',\n    prompt: $json.message\n  },\n  json: true\n});\n\nif (!Array.isArray(response?.embedding)) {\n  throw new Error('Brak embedding z Ollama.');\n}\n\nreturn { json: { ...$json, queryEmbedding: response.embedding } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -140,
+        120
+      ],
+      "id": "ollama-embeddings",
+      "name": "Ollama Embeddings"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://qdrant:6333/collections/hotel_rag/points/search',\n  headers: { 'content-type': 'application/json' },\n  body: {\n    vector: $json.queryEmbedding,\n    limit: 4,\n    with_payload: true,\n    with_vector: false\n  },\n  json: true\n});\n\nconst hits = Array.isArray(response?.result) ? response.result : [];\n\nreturn { json: { ...$json, hits } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        120
+      ],
+      "id": "qdrant-search",
+      "name": "Qdrant Search"
+    },
+    {
+      "parameters": {
+        "jsCode": "const hits = Array.isArray($json.hits) ? $json.hits : [];\n\nconst sources = hits.map((hit) => ({\n  source: hit.payload?.source ?? 'unknown',\n  chunk: hit.payload?.chunk ?? null,\n  score: hit.score ?? null,\n  text: hit.payload?.text ?? ''\n}));\n\nconst context = sources\n  .map((item, index) => {\n    return `Fragment ${index + 1} (score: ${item.score ?? 'n/a'}, source: ${item.source}, chunk: ${item.chunk ?? 'n/a'})\\n${item.text}`;\n  })\n  .join('\\n\\n');\n\nconst topScore = sources.reduce((max, item) => {\n  if (typeof item.score !== 'number') return max;\n  return max === null || item.score > max ? item.score : max;\n}, null);\n\nreturn {\n  json: {\n    ...$json,\n    sources,\n    context,\n    topScore,\n    hitsCount: sources.length\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        120
+      ],
+      "id": "build-context",
+      "name": "Build Context"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://ollama:11434/api/generate',\n  headers: { 'content-type': 'application/json' },\n  body: {\n    model: 'qwen2.5:7b',\n    system: 'Odpowiadaj po polsku wyłącznie na podstawie kontekstu. Jeśli brak danych, napisz czego brakuje i nie zmyślaj.',\n    prompt: `Pytanie: ${$json.message}\\n\\nKontekst:\\n${$json.context}`,\n    stream: false\n  },\n  json: true\n});\n\nreturn { json: { ...$json, answer: response?.response ?? '' } };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        120
+      ],
+      "id": "ollama-generate",
+      "name": "Ollama Generate"
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  json: {\n    answer: $json.answer ?? '',\n    sources: $json.sources ?? [],\n    meta: {\n      topScore: $json.topScore ?? null,\n      hits: $json.hitsCount ?? 0\n    }\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        120
+      ],
+      "id": "format-response",
+      "name": "Format Response"
+    },
+    {
+      "parameters": {
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        960,
+        120
+      ],
+      "id": "respond-200",
+      "name": "Respond 200"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook /agent": {
+      "main": [
+        [
+          {
+            "node": "Auth + Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth + Extract": {
+      "main": [
+        [
+          {
+            "node": "401?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "401?": {
+      "main": [
+        [
+          {
+            "node": "Respond 401",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ollama Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Search": {
+      "main": [
+        [
+          {
+            "node": "Build Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Context": {
+      "main": [
+        [
+          {
+            "node": "Ollama Generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Generate": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
