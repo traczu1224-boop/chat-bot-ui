@@ -24,7 +24,7 @@
           "string": [
             {
               "name": "message",
-              "value": "={{(($json.body && ($json.body.message ?? $json.body.question ?? $json.body.input)) || '').toString().trim()}}"
+              "value": "={{ (\n  (\n    $json.body?.message ??\n    $json.body?.question ??\n    $json.body?.input ??\n    $json.message ??\n    $json.question ??\n    $json.input ??\n    ''\n  ) + ''\n).trim() }}"
             }
           ]
         }
@@ -43,7 +43,7 @@
         "conditions": {
           "boolean": [
             {
-              "value1": "={{(() => { const h = $json.headers || $json.header || $json.request?.headers || {}; const auth = h.authorization || h.Authorization || ''; return auth === 'Bearer 1234'; })()}}",
+              "value1": "={{ (() => {\n  const h = $json.headers || $json.header || $json.request?.headers || {};\n  const auth = String(h.authorization || h.Authorization || '').trim();\n  // Na start: pozwól działać bez tokena, a token akceptuj jako Bearer 1234\n  return auth === '' || auth === 'Bearer 1234';\n})() }}",
               "operation": "isTrue"
             }
           ]
@@ -178,7 +178,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const hits = Array.isArray($json.hits) ? $json.hits : [];\n\nconst sources = hits.map((hit) => ({\n  source: hit.payload?.source ?? 'unknown',\n  chunk: hit.payload?.chunk ?? null,\n  score: hit.score ?? null,\n  text: hit.payload?.text ?? ''\n}));\n\nconst context = sources\n  .map((item, index) => {\n    return `Fragment ${index + 1} (score: ${item.score ?? 'n/a'}, source: ${item.source}, chunk: ${item.chunk ?? 'n/a'})\\n${item.text}`;\n  })\n  .join('\\n\\n');\n\nconst topScore = sources.reduce((max, item) => {\n  if (typeof item.score !== 'number') return max;\n  return max === null || item.score > max ? item.score : max;\n}, null);\n\nreturn {\n  json: {\n    ...$json,\n    sources,\n    context,\n    topScore,\n    hitsCount: sources.length\n  }\n};\n"
+        "jsCode": "const hits = Array.isArray($json.hits) ? $json.hits : [];\n\nconst sources = hits.map((hit) => ({\n  source: hit.payload?.source ?? 'unknown',\n  chunk: hit.payload?.chunk ?? null,\n  score: hit.score ?? null,\n  text: (hit.payload?.text ?? '') + ''\n}));\n\nconst context = sources\n  .map((item, index) => {\n    return `Fragment ${index + 1} (score: ${item.score ?? 'n/a'}, source: ${item.source}, chunk: ${item.chunk ?? 'n/a'})\\n${item.text}`;\n  })\n  .join('\\n\\n');\n\nconst topScore = sources.reduce((max, item) => {\n  if (typeof item.score !== 'number') return max;\n  return max === null || item.score > max ? item.score : max;\n}, null);\n\nreturn {\n  json: {\n    ...$json,\n    sources,\n    context,\n    topScore,\n    hitsCount: sources.length\n  }\n};\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,

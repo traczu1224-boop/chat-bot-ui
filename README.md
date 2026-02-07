@@ -5,7 +5,7 @@ Desktopowa aplikacja Company Assistant (Electron + TypeScript + React + Vite).
 ## Konfiguracja webhooka i tokenu
 
 1. Otwórz **Ustawienia** w aplikacji.
-2. Wpisz **Webhook URL** (musi zaczynać się od `http://` lub `https://`).
+2. Wpisz **Webhook URL** (musi zaczynać się od `http://` lub `https://`). Dla n8n używaj `http://127.0.0.1:5678/webhook/agent` (nie `/webhook-test/agent`).
 3. (Opcjonalnie) Wpisz **API Token** – jeśli pole jest puste, nagłówek `Authorization` nie będzie wysyłany.
 4. (Opcjonalnie) Uzupełnij **Nazwa użytkownika**.
 5. Zapisz ustawienia – zostaną trwale zapisane lokalnie.
