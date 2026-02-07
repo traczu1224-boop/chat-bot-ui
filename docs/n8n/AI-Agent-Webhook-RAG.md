@@ -136,6 +136,34 @@ Jeśli masz inne nazwy lub porty, zmień je w node'ach workflow:
      --data-binary \"@$path\"
    ```
 
+## 8) Testy w Windows PowerShell (bez BOM + token)
+
+1. **Zapisz JSON bez BOM (UTF-8 bez BOM)**:
+   ```powershell
+   $payload = '{\"message\":\"Jak hotel powinien reagować na reklamację hałasu?\"}'
+   $path = \"$env:TEMP\\rag-request.json\"
+   [System.IO.File]::WriteAllText($path, $payload, New-Object System.Text.UTF8Encoding($false))
+   ```
+2. **Wyślij request bez BOM**:
+   ```powershell
+   curl.exe -X POST http://127.0.0.1:5678/webhook/agent `
+     -H \"Content-Type: application/json\" `
+     --data-binary \"@$path\"
+   ```
+3. **Test z tokenem (REQUIRE_AUTH=true)**:
+   ```powershell
+   curl.exe -X POST http://127.0.0.1:5678/webhook/agent `
+     -H \"Content-Type: application/json\" `
+     -H \"Authorization: Bearer TWOJ_TOKEN\" `
+     --data-binary \"@$path\"
+   ```
+4. **Test bez tokena (REQUIRE_AUTH=true)** – powinno zwrócić 401:
+   ```powershell
+   curl.exe -X POST http://127.0.0.1:5678/webhook/agent `
+     -H \"Content-Type: application/json\" `
+     --data-binary \"@$path\"
+   ```
+
 Gotowe! Jeśli widzisz odpowiedź i źródła, integracja działa end-to-end.
 
 ## Dlaczego nie używać `process.env` + różnica `/webhook` vs `/webhook-test`
