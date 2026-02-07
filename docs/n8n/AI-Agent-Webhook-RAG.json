@@ -24,7 +24,7 @@
           "string": [
             {
               "name": "message",
-              "value": "={{ (\n  (\n    $json.body?.message ??\n    $json.body?.question ??\n    $json.body?.input ??\n    $json.message ??\n    $json.question ??\n    $json.input ??\n    ''\n  ) + ''\n).trim() }}"
+              "value": "={{(\n  (\n    $json.body?.message ??\n    $json.body?.question ??\n    $json.body?.input ??\n    $json.message ??\n    $json.question ??\n    $json.input ??\n    ''\n  ) + ''\n).trim()}}"
             }
           ]
         }
@@ -259,6 +259,7 @@
     },
     {
       "parameters": {
+        "responseCode": 200,
         "responseData": "firstEntryJson",
         "options": {}
       },
@@ -300,14 +301,14 @@
       "main": [
         [
           {
-            "node": "Unauthorized Response",
+            "node": "Message OK?",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Message OK?",
+            "node": "Unauthorized Response",
             "type": "main",
             "index": 0
           }
@@ -329,14 +330,14 @@
       "main": [
         [
           {
-            "node": "Bad Request Response",
+            "node": "Ollama Embeddings",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Ollama Embeddings",
+            "node": "Bad Request Response",
             "type": "main",
             "index": 0
           }
