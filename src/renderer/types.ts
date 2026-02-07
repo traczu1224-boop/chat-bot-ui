@@ -1,7 +1,8 @@
 export type SourceItem = {
-  title: string;
-  url?: string;
-  snippet?: string;
+  source: string;
+  chunk?: number | string | null;
+  score?: number | null;
+  text?: string | null;
 };
 
 export type MessageRole = 'user' | 'assistant';
