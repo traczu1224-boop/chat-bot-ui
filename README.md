@@ -12,6 +12,39 @@ Desktopowa aplikacja Company Assistant (Electron + TypeScript + React + Vite).
 
 > ⚠️ Token API jest przechowywany lokalnie w `electron-store`. Rozważ użycie mechanizmu systemowego (np. keychain) w środowiskach produkcyjnych.
 
+## Webhook test vs production
+
+- **Test URL (tylko w trybie Execute workflow w edytorze n8n):**
+  `http://127.0.0.1:5678/webhook-test/agent`
+- **Production URL (działa tylko, gdy workflow jest ACTIVE):**
+  `http://127.0.0.1:5678/webhook/agent`
+
+Jeśli widzisz w UI komunikat o braku połączenia, upewnij się, że workflow jest **aktywowany** w n8n i korzystasz z **produkcyjnego** URL. Produkcyjny webhook nie zadziała, gdy workflow jest wyłączony.
+
+## Timeout klienta
+
+Wykonanie workflow może trwać ~40s. Upewnij się, że klient ma timeout ustawiony na **co najmniej 60–120s**, aby uniknąć błędów połączenia.
+
+## IF outputs w n8n (ważne)
+
+W node'ach typu **IF**: `output[0] = TRUE`, `output[1] = FALSE`. To łatwo pomylić przy łączeniu ścieżek.
+
+## Przykładowe testy (PowerShell)
+
+1. Zapis request JSON bez BOM:
+   ```powershell
+   [System.IO.File]::WriteAllText("request.json", '{"message":"Jak hotel powinien reagować na reklamację hałasu?"}', (New-Object System.Text.UTF8Encoding($false)))
+   ```
+2. Wyślij request z tokenem:
+   ```powershell
+   curl.exe -X POST http://127.0.0.1:5678/webhook/agent `
+     -H "Content-Type: application/json" `
+     -H "Authorization: Bearer 1234" `
+     --data-binary "@request.json"
+   ```
+
+> W trybie produkcyjnym `/webhook/agent` działa tylko, gdy workflow jest **ACTIVE**.
+
 ## Tryb developerski (Vite + Electron)
 
 ```bash
