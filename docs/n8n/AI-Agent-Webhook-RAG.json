@@ -43,7 +43,7 @@
         "conditions": {
           "boolean": [
             {
-              "value1": "={{(() => { const requireAuth = ($vars.REQUIRE_AUTH || 'false').toString().toLowerCase() === 'true'; if (!requireAuth) return true; const token = $vars.CHATBOT_UI_TOKEN || ''; if (!token) return false; const authHeader = ($json.headers && ($json.headers.authorization || $json.headers.Authorization)) || ''; return authHeader === `Bearer ${token}`; })()}}",
+              "value1": "={{(() => { const h = $json.headers || $json.header || $json.request?.headers || {}; const auth = h.authorization || h.Authorization || ''; return auth === 'Bearer 1234'; })()}}",
               "operation": "isTrue"
             }
           ]
