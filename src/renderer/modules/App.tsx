@@ -6,6 +6,7 @@ import type {
   ClientInfo,
   ConversationMeta,
   ConversationPayload,
+  DiagnosticsInfo,
   Message,
   Settings,
   SettingsState,
@@ -41,6 +42,29 @@ const formatTime = (iso: string) => {
   return date.toLocaleString('pl-PL');
 };
 
+const formatDiagnosticsText = (info: DiagnosticsInfo) => {
+  const lines = [
+    info.appName,
+    `Version: ${info.appVersion}`,
+    `Build: ${info.build}`,
+    `Author: ${info.author}`,
+    `OS: ${info.platform} ${info.arch}`,
+    `Electron: ${info.electronVersion}  Chrome: ${info.chromeVersion}  Node: ${info.nodeVersion}`,
+    `Storage: ${info.storage.type}`,
+    `Storage path: ${info.storage.path}`,
+    `Storage exists: ${info.storage.exists ? 'yes' : 'no'}`,
+    `Storage format: ${info.storage.format ?? 'unknown'}`,
+    `Storage examples: ${(info.storage.exampleFiles ?? []).join(', ')}`,
+    `Conversations: ${info.conversationsCount ?? 'unknown'}`
+  ];
+
+  if (info.webhookUrl) {
+    lines.push(`Webhook URL: ${info.webhookUrl}`);
+  }
+
+  return lines.join('\n');
+};
+
 const App = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState('');
@@ -54,6 +78,7 @@ const App = () => {
   });
   const [showSettings, setShowSettings] = useState(false);
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
+  const [diagnosticsInfo, setDiagnosticsInfo] = useState<DiagnosticsInfo | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [conversationIndex, setConversationIndex] = useState<ConversationMeta[]>([]);
   const [conversationSearchTerm, setConversationSearchTerm] = useState('');
@@ -98,6 +123,18 @@ const App = () => {
     };
     void load();
   }, []);
+
+  const loadDiagnosticsInfo = useCallback(async () => {
+    const info = await window.companyAssistant.diagnostics.getInfo();
+    setDiagnosticsInfo(info);
+  }, []);
+
+  useEffect(() => {
+    if (!showSettings) {
+      return;
+    }
+    void loadDiagnosticsInfo();
+  }, [loadDiagnosticsInfo, showSettings]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -292,6 +329,30 @@ const App = () => {
     },
     [dismissToast]
   );
+
+  const handleCopyDiagnostics = useCallback(async () => {
+    if (!diagnosticsInfo) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(formatDiagnosticsText(diagnosticsInfo));
+      pushToast({
+        id: crypto.randomUUID(),
+        title: 'Skopiowano',
+        message: 'Informacje diagnostyczne trafiły do schowka.',
+        tone: 'success',
+        timeoutMs: 2400
+      });
+    } catch {
+      pushToast({
+        id: crypto.randomUUID(),
+        title: 'Nie udało się skopiować',
+        message: 'Sprawdź uprawnienia schowka.',
+        tone: 'error',
+        timeoutMs: 3000
+      });
+    }
+  }, [diagnosticsInfo, pushToast]);
 
   const scheduleHardDelete = useCallback((conversationId: string) => {
     const existing = deleteTimersRef.current.get(conversationId);
@@ -1152,8 +1213,10 @@ const App = () => {
         <SettingsModal
           settings={settings}
           settingsState={settingsState}
+          diagnosticsInfo={diagnosticsInfo}
           onClose={() => setShowSettings(false)}
           onSave={handleSaveSettings}
+          onCopyDiagnostics={handleCopyDiagnostics}
         />
       )}
     </div>
@@ -1163,13 +1226,17 @@ const App = () => {
 const SettingsModal = ({
   settings,
   settingsState,
+  diagnosticsInfo,
   onClose,
-  onSave
+  onSave,
+  onCopyDiagnostics
 }: {
   settings: Settings;
   settingsState: SettingsState;
+  diagnosticsInfo: DiagnosticsInfo | null;
   onClose: () => void;
   onSave: (settings: Settings) => void;
+  onCopyDiagnostics: () => void;
 }) => {
   const [draft, setDraft] = useState(settings);
   const isLocked = settingsState.locked;
@@ -1269,6 +1336,92 @@ const SettingsModal = ({
               <option value="system">System</option>
             </select>
           </label>
+        </div>
+        <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold">O aplikacji</h3>
+              <p className="text-xs text-slate-400">Podstawowe informacje i diagnostyka.</p>
+            </div>
+            <button
+              type="button"
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 transition hover:border-accent-400/50 hover:text-white disabled:opacity-60"
+              onClick={onCopyDiagnostics}
+              disabled={!diagnosticsInfo}
+            >
+              Kopiuj info diagnostyczne
+            </button>
+          </div>
+          {!diagnosticsInfo ? (
+            <div className="mt-4 text-xs text-slate-400">Ładowanie danych diagnostycznych...</div>
+          ) : (
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="grid gap-2">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Nazwa aplikacji</span>
+                  <span>{diagnosticsInfo.appName}</span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Wersja</span>
+                  <span>{diagnosticsInfo.appVersion}</span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Build / Commit</span>
+                  <span>{diagnosticsInfo.build}</span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Autor</span>
+                  <span>{diagnosticsInfo.author}</span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Platforma</span>
+                  <span>
+                    {diagnosticsInfo.platform} {diagnosticsInfo.arch}
+                  </span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Silniki</span>
+                  <span>
+                    Electron {diagnosticsInfo.electronVersion} · Chrome {diagnosticsInfo.chromeVersion} · Node{' '}
+                    {diagnosticsInfo.nodeVersion}
+                  </span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Storage</span>
+                  <span>{diagnosticsInfo.storage.type}</span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Ścieżka storage</span>
+                  <span className="break-all text-right">{diagnosticsInfo.storage.path}</span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Format</span>
+                  <span>{diagnosticsInfo.storage.format ?? 'unknown'}</span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Przykładowe pliki</span>
+                  <span className="break-all text-right">
+                    {(diagnosticsInfo.storage.exampleFiles ?? []).join(', ')}
+                  </span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Liczba rozmów</span>
+                  <span>{diagnosticsInfo.conversationsCount ?? 'unknown'}</span>
+                </div>
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Storage istnieje</span>
+                  <span>{diagnosticsInfo.storage.exists ? 'Tak' : 'Nie'}</span>
+                </div>
+                {diagnosticsInfo.webhookUrl && (
+                  <div className="flex flex-wrap justify-between gap-2">
+                    <span className="text-xs uppercase tracking-[0.2em] text-slate-400">Webhook URL</span>
+                    <span className="break-all text-right">{diagnosticsInfo.webhookUrl}</span>
+                  </div>
+                )}
+              </div>
+              <div className="text-xs text-slate-400">Autor: Michał Tracz</div>
+            </div>
+          )}
         </div>
         <div className="mt-6 flex justify-end gap-2">
           <button

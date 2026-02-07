@@ -1,7 +1,8 @@
 import { app, dialog, ipcMain, shell } from 'electron';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
-import type { ConversationPayload, Settings } from './types.js';
+import type { ConversationPayload, DiagnosticsInfo, Settings } from './types.js';
+import { getDiagnosticsInfo } from './diagnostics.js';
 import { askN8n, isValidWebhookUrl } from './n8n.js';
 import {
   conversationExists,
@@ -25,7 +26,6 @@ import {
   setLastConversationId,
   upsertConversationIndex
 } from './storage.js';
-import { getConversationsDir, getConversationsStats } from './storageConversations.js';
 
 const ensureConversation = async (conversationId: string): Promise<ConversationPayload> => {
   const messages = await readConversation(conversationId);
@@ -214,16 +214,14 @@ export const registerIpcHandlers = () => {
     if (canceled || !filePath) {
       return { saved: false };
     }
-    const conversationStats = await getConversationsStats();
-    const payload = {
-      app_version: app.getVersion(),
-      platform: process.platform,
-      userDataPath: app.getPath('userData'),
-      conversationsDir: getConversationsDir(),
-      conversationFiles: conversationStats.files,
-      conversationsSizeBytes: conversationStats.totalSize
+    const diagnostics = await getDiagnosticsInfo();
+    const payload: DiagnosticsInfo & { userDataPath: string } = {
+      ...diagnostics,
+      userDataPath: app.getPath('userData')
     };
     await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
     return { saved: true };
   });
+
+  ipcMain.handle('diagnostics:getInfo', () => getDiagnosticsInfo());
 };

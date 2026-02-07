@@ -139,3 +139,33 @@ export const getConversationsStats = async () => {
     return { directory: dir, files: 0, totalSize: 0 };
   }
 };
+
+export const getStorageInfo = async () => {
+  const dir = getConversationsDir();
+  let exists = false;
+  let exampleFiles: string[] = [];
+
+  try {
+    await fs.access(dir);
+    exists = true;
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    exampleFiles = entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .map((entry) => entry.name)
+      .slice(0, 3);
+  } catch {
+    exists = false;
+  }
+
+  if (exampleFiles.length === 0) {
+    exampleFiles = ['<conversationId>.json'];
+  }
+
+  return {
+    type: 'files' as const,
+    path: dir,
+    exists,
+    format: 'json',
+    exampleFiles
+  };
+};

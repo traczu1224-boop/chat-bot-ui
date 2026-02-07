@@ -58,3 +58,27 @@ export type ClientInfo = {
   platform: string;
   userDataPath: string;
 };
+
+export type StorageInfo = {
+  type: 'files' | 'sqlite' | 'unknown';
+  path: string;
+  exists: boolean;
+  format?: string;
+  exampleFiles?: string[];
+};
+
+export type DiagnosticsInfo = {
+  appName: string;
+  appVersion: string;
+  build: string;
+  author: string;
+  platform: string;
+  arch: string;
+  electronVersion: string;
+  chromeVersion: string;
+  nodeVersion: string;
+  storage: StorageInfo;
+  conversationsCount?: number;
+  conversationsSizeBytes?: number;
+  webhookUrl?: string | null;
+};
