@@ -11,7 +11,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        -820,
+        -960,
         0
       ],
       "id": "webhook-agent",
@@ -19,25 +19,32 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $json.body ?? {};\nconst headers = $json.headers ?? {};\nconst message = (body.message ?? body.question ?? body.input ?? '').toString().trim();\n\nif (!message) {\n  throw new Error('Brak pola message/question/input w body.');\n}\n\nconst requireAuth = (process.env.REQUIRE_AUTH ?? 'false').toLowerCase() === 'true';\nconst token = process.env.CHATBOT_UI_TOKEN;\nconst authHeader = headers.authorization ?? headers.Authorization;\n\nlet isAuthorized = true;\n\nif (authHeader) {\n  if (token) {\n    isAuthorized = authHeader === `Bearer ${token}`;\n  } else {\n    isAuthorized = !requireAuth;\n  }\n} else {\n  isAuthorized = !requireAuth;\n}\n\nif (!isAuthorized) {\n  return [{ json: { status: 401, error: 'Unauthorized' } }];\n}\n\nreturn [{ json: { message } }];\n"
+        "keepOnlySet": false,
+        "values": {
+          "string": [
+            {
+              "name": "message",
+              "value": "={{(($json.body && ($json.body.message ?? $json.body.question ?? $json.body.input)) || '').toString().trim()}}"
+            }
+          ]
+        }
       },
-      "type": "n8n-nodes-base.code",
+      "type": "n8n-nodes-base.set",
       "typeVersion": 2,
       "position": [
-        -600,
+        -740,
         0
       ],
-      "id": "auth-and-extract",
-      "name": "Auth + Extract"
+      "id": "prepare-request",
+      "name": "Prepare Request"
     },
     {
       "parameters": {
         "conditions": {
-          "number": [
+          "boolean": [
             {
-              "value1": "={{$json.status}}",
-              "operation": "equal",
-              "value2": 401
+              "value1": "={{(() => { const requireAuth = ($vars.REQUIRE_AUTH || 'false').toString().toLowerCase() === 'true'; if (!requireAuth) return true; const token = $vars.CHATBOT_UI_TOKEN || ''; if (!token) return false; const authHeader = ($json.headers && ($json.headers.authorization || $json.headers.Authorization)) || ''; return authHeader === `Bearer ${token}`; })()}}",
+              "operation": "isTrue"
             }
           ]
         }
@@ -45,11 +52,32 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -380,
+        -520,
         0
       ],
-      "id": "if-unauthorized",
-      "name": "401?"
+      "id": "if-authorized",
+      "name": "Authorized?"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "error",
+              "value": "Unauthorized"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        -180
+      ],
+      "id": "unauthorized-response",
+      "name": "Unauthorized Response"
     },
     {
       "parameters": {
@@ -60,11 +88,67 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        -160,
-        -140
+        -80,
+        -180
       ],
       "id": "respond-401",
       "name": "Respond 401"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.message}}",
+              "operation": "notEmpty"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        0
+      ],
+      "id": "if-message",
+      "name": "Message OK?"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "error",
+              "value": "Brak pola message/question/input w body."
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        -40
+      ],
+      "id": "bad-request-response",
+      "name": "Bad Request Response"
+    },
+    {
+      "parameters": {
+        "responseCode": 400,
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        140,
+        -40
+      ],
+      "id": "respond-400",
+      "name": "Respond 400"
     },
     {
       "parameters": {
@@ -73,7 +157,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -140,
+        -80,
         120
       ],
       "id": "ollama-embeddings",
@@ -81,12 +165,12 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://qdrant:6333/collections/hotel_rag/points/search',\n  headers: { 'content-type': 'application/json' },\n  body: {\n    vector: $json.queryEmbedding,\n    limit: 4,\n    with_payload: true,\n    with_vector: false\n  },\n  json: true\n});\n\nconst hits = Array.isArray(response?.result) ? response.result : [];\n\nreturn { json: { ...$json, hits } };\n"
+        "jsCode": "const response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://qdrant:6333/collections/hotel_rag/points/search',\n  headers: { 'content-type': 'application/json' },\n  body: {\n    vector: $json.queryEmbedding,\n    limit: 4,\n    with_payload: true,\n    with_vector: false,\n    score_threshold: 0.6\n  },\n  json: true\n});\n\nconst hits = Array.isArray(response?.result) ? response.result : [];\n\nreturn { json: { ...$json, hits } };\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        140,
         120
       ],
       "id": "qdrant-search",
@@ -99,7 +183,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        300,
+        360,
         120
       ],
       "id": "build-context",
@@ -107,16 +191,58 @@
     },
     {
       "parameters": {
-        "jsCode": "const response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://ollama:11434/api/generate',\n  headers: { 'content-type': 'application/json' },\n  body: {\n    model: 'llama3.2:3b',\n    system: 'Odpowiadaj po polsku wyłącznie na podstawie kontekstu. Jeśli brak danych, napisz czego brakuje i nie zmyślaj.',\n    prompt: `Pytanie: ${$json.message}\\n\\nKontekst:\\n${$json.context}`,\n    stream: false\n  },\n  json: true\n});\n\nreturn { json: { ...$json, answer: response?.response ?? '' } };\n"
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.hitsCount}}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        580,
+        120
+      ],
+      "id": "if-hits",
+      "name": "Hits > 0?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'http://ollama:11434/api/generate',\n  headers: { 'content-type': 'application/json' },\n  body: {\n    model: 'llama3.2:3b',\n    system: 'Odpowiadaj po polsku wyłącznie na podstawie kontekstu. Jeśli brak danych, powiedz czego brakuje i nie zmyślaj.',\n    prompt: `Pytanie: ${$json.message}\\n\\nKontekst:\\n${$json.context}`,\n    stream: false,\n    options: {\n      temperature: 0.2,\n      top_p: 0.9,\n      num_predict: 220\n    }\n  },\n  json: true\n});\n\nreturn { json: { ...$json, answer: response?.response ?? '' } };\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        520,
-        120
+        800,
+        0
       ],
       "id": "ollama-generate",
       "name": "Ollama Generate"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": false,
+        "values": {
+          "string": [
+            {
+              "name": "answer",
+              "value": "Nie mam informacji w bazie na ten temat. Doprecyzuj pytanie lub dodaj dokument do RAG."
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        800,
+        220
+      ],
+      "id": "no-hits-answer",
+      "name": "No Hits Answer"
     },
     {
       "parameters": {
@@ -125,7 +251,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        740,
+        1020,
         120
       ],
       "id": "format-response",
@@ -139,7 +265,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        960,
+        1240,
         120
       ],
       "id": "respond-200",
@@ -152,25 +278,43 @@
       "main": [
         [
           {
-            "node": "Auth + Extract",
+            "node": "Prepare Request",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Auth + Extract": {
+    "Prepare Request": {
       "main": [
         [
           {
-            "node": "401?",
+            "node": "Authorized?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "401?": {
+    "Authorized?": {
+      "main": [
+        [
+          {
+            "node": "Unauthorized Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unauthorized Response": {
       "main": [
         [
           {
@@ -178,10 +322,32 @@
             "type": "main",
             "index": 0
           }
+        ]
+      ]
+    },
+    "Message OK?": {
+      "main": [
+        [
+          {
+            "node": "Bad Request Response",
+            "type": "main",
+            "index": 0
+          }
         ],
         [
           {
             "node": "Ollama Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bad Request Response": {
+      "main": [
+        [
+          {
+            "node": "Respond 400",
             "type": "main",
             "index": 0
           }
@@ -214,7 +380,25 @@
       "main": [
         [
           {
+            "node": "Hits > 0?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hits > 0?": {
+      "main": [
+        [
+          {
             "node": "Ollama Generate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Hits Answer",
             "type": "main",
             "index": 0
           }
@@ -222,6 +406,17 @@
       ]
     },
     "Ollama Generate": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Hits Answer": {
       "main": [
         [
           {
