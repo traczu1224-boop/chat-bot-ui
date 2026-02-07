@@ -1,9 +1,9 @@
 import { app } from 'electron';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import type { Message } from './types';
 
-const getConversationsDir = () => path.join(app.getPath('userData'), 'conversations');
+export const getConversationsDir = () => path.join(app.getPath('userData'), 'conversations');
 
 const ensureConversationsDir = async () => {
   await fs.mkdir(getConversationsDir(), { recursive: true });
@@ -58,4 +58,23 @@ export const formatConversationTxt = (conversationId: string, messages: Message[
   });
 
   return [`Conversation ID: ${conversationId}`, '', ...lines].join('\n');
+};
+
+export const getConversationsStats = async () => {
+  const dir = getConversationsDir();
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const files = entries.filter((entry) => entry.isFile());
+    const stats = await Promise.all(
+      files.map(async (entry) => {
+        const filePath = path.join(dir, entry.name);
+        const fileStat = await fs.stat(filePath);
+        return fileStat.size;
+      })
+    );
+    const totalSize = stats.reduce((acc, size) => acc + size, 0);
+    return { directory: dir, files: files.length, totalSize };
+  } catch {
+    return { directory: dir, files: 0, totalSize: 0 };
+  }
 };

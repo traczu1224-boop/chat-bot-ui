@@ -1,5 +1,5 @@
 import { app, BrowserWindow, session } from 'electron';
-import path from 'node:path';
+import * as path from 'node:path';
 import { registerIpcHandlers } from './ipc';
 import { getOrCreateDeviceId } from './storage';
 
@@ -23,6 +23,14 @@ const createWindow = () => {
   });
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const isFile = url.startsWith('file://');
+    const devUrl = process.env.VITE_DEV_SERVER_URL;
+    const isDevUrl = devUrl ? url.startsWith(devUrl) : false;
+    if (!isFile && !isDevUrl) {
+      event.preventDefault();
+    }
+  });
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -32,6 +40,7 @@ const createWindow = () => {
 };
 
 app.whenReady().then(() => {
+  console.info('[main] uruchamianie aplikacji');
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
