@@ -14,6 +14,11 @@ export type Message = {
   sources?: SourceItem[];
 };
 
+export type ConversationPayload = {
+  conversationId: string;
+  messages: Message[];
+};
+
 export type Settings = {
   webhookUrl: string;
   apiToken: string;
@@ -21,9 +26,9 @@ export type Settings = {
   theme: 'dark' | 'light' | 'system';
 };
 
-export type ConversationPayload = {
+export type SendQuestionPayload = {
+  question: string;
   conversationId: string;
-  messages: Message[];
 };
 
 export type AskResult = {
@@ -34,5 +39,5 @@ export type AskResult = {
 
 export type ClientInfo = {
   app_version: string;
-  platform: string;
+  platform: NodeJS.Platform;
 };

@@ -1,20 +1,31 @@
-import type { ConversationPayload, Message, Settings, SourceItem } from './types';
+import type { AskResult, ClientInfo, ConversationPayload, Settings } from './types';
 
 declare global {
   interface Window {
-    api: {
-      getSettings: () => Promise<Settings>;
-      saveSettings: (settings: Settings) => Promise<void>;
-      loadLastConversation: () => Promise<ConversationPayload>;
-      newConversation: () => Promise<ConversationPayload>;
-      sendMessage: (payload: { conversationId: string; content: string; tempId: string }) => Promise<{
-        userMessage: Message;
-        assistantMessage: Message;
-      }>;
-      exportConversation: (conversationId: string) => Promise<{ saved: boolean }>;
-      openExternal: (url: string) => Promise<void>;
-      getAppInfo: () => Promise<{ version: string; platform: string; deviceId: string }>; 
-      getMockMode: () => Promise<boolean>;
+    companyAssistant: {
+      settings: {
+        get: () => Promise<Settings>;
+        save: (settings: Settings) => Promise<void>;
+      };
+      device: {
+        getOrCreate: () => Promise<string>;
+      };
+      conversation: {
+        loadLast: () => Promise<ConversationPayload>;
+        load: (conversationId: string) => Promise<ConversationPayload>;
+        new: () => Promise<ConversationPayload>;
+        save: (payload: ConversationPayload) => Promise<{ saved: boolean }>;
+        exportTxt: (conversationId: string) => Promise<{ saved: boolean }>;
+      };
+      n8n: {
+        ask: (payload: { question: string; conversationId: string }) => Promise<AskResult>;
+      };
+      shell: {
+        openExternal: (url: string) => Promise<void>;
+      };
+      client: {
+        getInfo: () => Promise<ClientInfo>;
+      };
     };
   }
 }

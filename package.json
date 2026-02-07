@@ -2,32 +2,38 @@
   "name": "company-assistant",
   "version": "1.0.0",
   "description": "Company Assistant desktop app",
-  "main": "dist/main/index.js",
+  "main": "dist-electron/main.js",
   "author": "",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"tsc -w -p tsconfig.main.json\" \"wait-on http://localhost:5173 dist/main/index.js dist/preload/index.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
-    "build": "tsc -p tsconfig.main.json && vite build",
+    "dev": "concurrently -k \"vite\" \"tsc -w -p electron/tsconfig.electron.json\" \"wait-on http://localhost:5173 dist-electron/main.js dist-electron/preload.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build": "tsc -p electron/tsconfig.electron.json && vite build",
     "dist": "electron-builder"
   },
   "dependencies": {
     "dompurify": "^3.0.6",
     "electron-store": "^8.1.0",
-    "markdown-it": "^14.1.0",
+    "marked": "^12.0.2",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/dompurify": "^3.0.5",
     "@types/node": "^20.12.7",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^9.0.8",
     "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.19",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^28.2.0",
     "electron-builder": "^24.13.3",
+    "electronmon": "^2.0.2",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
     "typescript": "^5.4.5",
     "vite": "^5.2.8",
     "wait-on": "^7.2.0"
@@ -40,10 +46,11 @@
       "output": "release"
     },
     "files": [
-      "dist/**/*"
+      "dist/**/*",
+      "dist-electron/**/*"
     ],
     "extraMetadata": {
-      "main": "dist/main/index.js"
+      "main": "dist-electron/main.js"
     },
     "win": {
       "target": [
