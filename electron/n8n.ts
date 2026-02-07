@@ -21,6 +21,43 @@ type AskOptions = {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const timeoutErrorMessage = 'Przekroczono czas oczekiwania na odpowiedź (timeout). Spróbuj ponownie lub zwiększ limit.';
+const networkErrorMessage = 'Brak połączenia z siecią lub nie można połączyć z webhookiem.';
+
+const getErrorCode = (error: unknown) => {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+  const maybeError = error as { code?: unknown; cause?: unknown };
+  if (typeof maybeError.code === 'string') {
+    return maybeError.code;
+  }
+  if (maybeError.cause && typeof maybeError.cause === 'object') {
+    const maybeCause = maybeError.cause as { code?: unknown };
+    if (typeof maybeCause.code === 'string') {
+      return maybeCause.code;
+    }
+  }
+  return undefined;
+};
+
+const isTimeoutError = (error: unknown, reason: unknown) => {
+  if (error instanceof Error && error.name === 'AbortError' && reason === 'timeout') {
+    return true;
+  }
+  const code = getErrorCode(error);
+  return code === 'ETIMEDOUT' || code === 'ECONNABORTED';
+};
+
+const isNetworkError = (error: unknown) => {
+  const code = getErrorCode(error);
+  return (
+    code === 'ENOTFOUND' ||
+    code === 'ECONNREFUSED' ||
+    code === 'EHOSTUNREACH' ||
+    code === 'ENETUNREACH'
+  );
+};
 
 export const askN8n = async (payload: SendQuestionPayload, options: AskOptions = {}): Promise<AskResult> => {
   const settings = getEffectiveSettings();
@@ -147,14 +184,21 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
       if (controller.signal.reason === 'user') {
         return { error: 'Anulowano wysyłkę na żądanie użytkownika.' };
       }
-      const timeoutSeconds = Math.round(WEBHOOK_TIMEOUT_MS / 1000);
-      return {
-        error: `Przekroczono limit czasu (${timeoutSeconds}s). Spróbuj ponownie.`
-      };
+      if (isTimeoutError(error, controller.signal.reason)) {
+        return { error: timeoutErrorMessage };
+      }
+    }
+
+    if (isTimeoutError(error, controller.signal.reason)) {
+      return { error: timeoutErrorMessage };
+    }
+
+    if (isNetworkError(error)) {
+      return { error: networkErrorMessage };
     }
 
     return {
-      error: 'Brak połączenia z siecią lub nie można połączyć z webhookiem.'
+      error: networkErrorMessage
     };
   } finally {
     clearTimeout(timeout);

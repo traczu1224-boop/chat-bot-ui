@@ -183,14 +183,6 @@ const App = () => {
     if (!trimmed) {
       return;
     }
-    if (!isOnline) {
-      appendAssistantMessage('Brak połączenia z siecią. Sprawdź połączenie i spróbuj ponownie.', [], {
-        isError: true,
-        retryPayload: { question: trimmed, conversationId }
-      });
-      return;
-    }
-
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -231,7 +223,7 @@ const App = () => {
       setIsTyping(false);
       setPendingRequestId(null);
     }
-  }, [conversationId, input, isLoading, isOnline]);
+  }, [conversationId, input, isLoading]);
 
   useEffect(() => {
     if (!conversationId) {
