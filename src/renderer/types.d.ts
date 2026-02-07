@@ -3,6 +3,7 @@ import type {
   ClientInfo,
   ConversationMeta,
   ConversationPayload,
+  DiagnosticsInfo,
   Settings,
   SettingsState
 } from './types';
@@ -40,6 +41,7 @@ declare global {
       };
       diagnostics: {
         export: () => Promise<{ saved: boolean }>;
+        getInfo: () => Promise<DiagnosticsInfo>;
       };
     };
   }

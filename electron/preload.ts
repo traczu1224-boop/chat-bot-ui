@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ConversationMeta, ConversationPayload, Settings, SettingsState } from './types.js';
+import type { ConversationMeta, ConversationPayload, DiagnosticsInfo, Settings, SettingsState } from './types.js';
 
 contextBridge.exposeInMainWorld('companyAssistant', {
   settings: {
@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('companyAssistant', {
     getInfo: () => ipcRenderer.invoke('client:getInfo')
   },
   diagnostics: {
-    export: () => ipcRenderer.invoke('diagnostics:export')
+    export: () => ipcRenderer.invoke('diagnostics:export'),
+    getInfo: (): Promise<DiagnosticsInfo> => ipcRenderer.invoke('diagnostics:getInfo')
   }
 });

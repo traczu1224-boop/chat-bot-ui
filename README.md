@@ -80,8 +80,13 @@ Wynikowe artefakty znajdziesz w katalogu `release/`.
 Konwersacje są zapisywane w katalogu:
 
 - `userData/conversations` (np. `~/Library/Application Support/Company Assistant/conversations` na macOS).
+- Pliki rozmów mają format **JSON** i nazwy w stylu `CONVERSATION_ID.json`.
 
 Usuwanie rozmowy przenosi jej plik do `userData/conversations/.trash` i przez 10 sekund pozwala cofnąć operację. Po tym czasie dane są trwale kasowane.
+
+## O aplikacji
+
+W **Ustawieniach** znajduje się sekcja „O aplikacji” z metadanymi, ścieżką storage oraz przyciskiem kopiowania diagnostyki do schowka.
 
 ## Zmienne środowiskowe
 
