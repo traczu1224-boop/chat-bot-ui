@@ -37,6 +37,7 @@ export type ConversationMeta = {
   id: string;
   title: string;
   updatedAt: string;
+  preview?: string | null;
 };
 
 export type ConversationPayload = {
@@ -48,6 +49,8 @@ export type AskResult = {
   answer?: string;
   sources?: SourceItem[];
   error?: string | null;
+  errorType?: 'timeout' | 'network' | 'http' | 'canceled' | 'unknown';
+  status?: number;
 };
 
 export type ClientInfo = {

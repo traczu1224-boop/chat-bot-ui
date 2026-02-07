@@ -19,6 +19,23 @@ const initialSettings: Settings = {
   theme: 'dark'
 };
 
+type ToastTone = 'info' | 'success' | 'warning' | 'error';
+
+type Toast = {
+  id: string;
+  title: string;
+  message?: string;
+  tone?: ToastTone;
+  actionLabel?: string;
+  onAction?: () => void;
+  timeoutMs?: number;
+};
+
+type RetryPayload = {
+  question: string;
+  conversationId: string;
+};
+
 const formatTime = (iso: string) => {
   const date = new Date(iso);
   return date.toLocaleString('pl-PL');
@@ -39,11 +56,18 @@ const App = () => {
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [conversationIndex, setConversationIndex] = useState<ConversationMeta[]>([]);
+  const [conversationSearchTerm, setConversationSearchTerm] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ConversationMeta | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const endRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const toastTimersRef = useRef<Map<string, number>>(new Map());
+  const deleteTimersRef = useRef<Map<string, number>>(new Map());
 
   const markdown = useMemo(() => {
     const renderer = new marked.Renderer();
@@ -84,6 +108,37 @@ const App = () => {
   }, []);
 
   useEffect(() => {
+    if (!openMenuId) {
+      return;
+    }
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-conversation-menu]')) {
+        return;
+      }
+      setOpenMenuId(null);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [openMenuId]);
+
+  useEffect(() => {
+    return () => {
+      toastTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      deleteTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
+
+  useEffect(() => {
     const updateStatus = () => setIsOnline(navigator.onLine);
     window.addEventListener('online', updateStatus);
     window.addEventListener('offline', updateStatus);
@@ -117,12 +172,14 @@ const App = () => {
   const refreshConversationIndex = useCallback(async () => {
     const next = await window.companyAssistant.conversation.list();
     setConversationIndex(next);
+    return next;
   }, []);
 
   const handleNewConversation = async () => {
     const conversation = await window.companyAssistant.conversation.new();
     setMessages(conversation.messages);
     setConversationId(conversation.conversationId);
+    setConversationSearchTerm('');
     setSearchTerm('');
     await refreshConversationIndex();
   };
@@ -136,6 +193,69 @@ const App = () => {
 
   const handleExport = async () => {
     await window.companyAssistant.conversation.exportTxt(conversationId);
+  };
+
+  const handleExportConversation = async (targetId: string) => {
+    await window.companyAssistant.conversation.exportTxt(targetId);
+  };
+
+  const handleRequestDelete = (conversation: ConversationMeta) => {
+    setOpenMenuId(null);
+    setDeleteTarget(conversation);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    const { deleted } = await window.companyAssistant.conversation.softDelete(target.id);
+    if (!deleted) {
+      pushToast({
+        id: crypto.randomUUID(),
+        title: 'Nie udało się usunąć rozmowy',
+        message: 'Spróbuj ponownie.',
+        tone: 'error'
+      });
+      return;
+    }
+
+    const nextIndex = await refreshConversationIndex();
+    if (conversationId === target.id) {
+      if (nextIndex.length > 0) {
+        await handleSelectConversation(nextIndex[0].id);
+      } else {
+        await handleNewConversation();
+      }
+    }
+
+    scheduleHardDelete(target.id);
+    const toastId = crypto.randomUUID();
+    pushToast({
+      id: toastId,
+      title: 'Usunięto rozmowę',
+      message: 'Masz 10 sekund na cofnięcie.',
+      tone: 'warning',
+      actionLabel: 'Cofnij',
+      timeoutMs: 10000,
+      onAction: async () => {
+        dismissToast(toastId);
+        cancelHardDelete(target.id);
+        const restored = await window.companyAssistant.conversation.restore(target.id);
+        if (restored.restored) {
+          await refreshConversationIndex();
+        } else {
+          pushToast({
+            id: crypto.randomUUID(),
+            title: 'Nie udało się przywrócić rozmowy',
+            message: 'Spróbuj ponownie.',
+            tone: 'error'
+          });
+        }
+      }
+    });
   };
 
   const handleExportDiagnostics = async () => {
@@ -152,6 +272,46 @@ const App = () => {
       window.alert((error as Error).message);
     }
   };
+
+  const dismissToast = useCallback((toastId: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== toastId));
+    const timer = toastTimersRef.current.get(toastId);
+    if (timer) {
+      window.clearTimeout(timer);
+      toastTimersRef.current.delete(toastId);
+    }
+  }, []);
+
+  const pushToast = useCallback(
+    (toast: Toast) => {
+      setToasts((prev) => [...prev, toast]);
+      if (toast.timeoutMs) {
+        const timer = window.setTimeout(() => dismissToast(toast.id), toast.timeoutMs);
+        toastTimersRef.current.set(toast.id, timer);
+      }
+    },
+    [dismissToast]
+  );
+
+  const scheduleHardDelete = useCallback((conversationId: string) => {
+    const existing = deleteTimersRef.current.get(conversationId);
+    if (existing) {
+      window.clearTimeout(existing);
+    }
+    const timer = window.setTimeout(async () => {
+      await window.companyAssistant.conversation.delete(conversationId);
+      deleteTimersRef.current.delete(conversationId);
+    }, 10000);
+    deleteTimersRef.current.set(conversationId, timer);
+  }, []);
+
+  const cancelHardDelete = useCallback((conversationId: string) => {
+    const timer = deleteTimersRef.current.get(conversationId);
+    if (timer) {
+      window.clearTimeout(timer);
+      deleteTimersRef.current.delete(conversationId);
+    }
+  }, []);
 
   const appendAssistantMessage = (
     content: string,
@@ -170,68 +330,115 @@ const App = () => {
     setMessages((prev) => [...prev, errorMessage]);
   };
 
-  const updateMessage = (id: string, updater: (message: Message) => Message) => {
-    setMessages((prev) => prev.map((message) => (message.id === id ? updater(message) : message)));
-  };
+  const sendQuestion = useCallback(
+    async (payload: RetryPayload, options: { appendUserMessage: boolean }) => {
+      if (isLoading || !payload.conversationId) {
+        return;
+      }
 
-  const handleSend = useCallback(async () => {
-    if (isLoading || !conversationId) {
-      return;
-    }
+      const trimmed = payload.question.trim();
+      if (!trimmed) {
+        return;
+      }
 
-    const trimmed = input.trim();
-    if (!trimmed) {
-      return;
-    }
-    if (!isOnline) {
-      appendAssistantMessage('Brak połączenia z siecią. Sprawdź połączenie i spróbuj ponownie.', [], {
-        isError: true,
-        retryPayload: { question: trimmed, conversationId }
-      });
-      return;
-    }
-
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: trimmed,
-      createdAt: new Date().toISOString()
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-    setIsTyping(true);
-    const requestId = crypto.randomUUID();
-    setPendingRequestId(requestId);
-
-    try {
-      const result = (await window.companyAssistant.n8n.ask({
-        question: trimmed,
-        conversationId,
-        requestId
-      })) as AskResult;
-
-      if (result.error || !result.answer) {
-        appendAssistantMessage(result.error || 'Brak odpowiedzi z webhooka.', result.sources, {
-          isError: true,
-          retryPayload: { question: trimmed, conversationId }
+      if (!isOnline) {
+        const toastId = crypto.randomUUID();
+        pushToast({
+          id: toastId,
+          title: 'Brak połączenia',
+          message: 'Sprawdź połączenie z siecią i spróbuj ponownie.',
+          tone: 'error',
+          actionLabel: 'Ponów',
+          onAction: () => {
+            dismissToast(toastId);
+            void sendQuestion(payload, { appendUserMessage: false });
+          }
         });
         return;
       }
 
-      appendAssistantMessage(result.answer, result.sources);
-    } catch {
-      appendAssistantMessage('Wystąpił błąd podczas wysyłania wiadomości.', [], {
-        isError: true,
-        retryPayload: { question: trimmed, conversationId }
-      });
-    } finally {
-      setIsLoading(false);
-      setIsTyping(false);
-      setPendingRequestId(null);
+      if (options.appendUserMessage) {
+        const userMessage: Message = {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: trimmed,
+          createdAt: new Date().toISOString()
+        };
+        setMessages((prev) => [...prev, userMessage]);
+        setInput('');
+      }
+
+      setIsLoading(true);
+      setIsTyping(true);
+      const requestId = crypto.randomUUID();
+      setPendingRequestId(requestId);
+
+      try {
+        const result = (await window.companyAssistant.n8n.ask({
+          question: trimmed,
+          conversationId: payload.conversationId,
+          requestId
+        })) as AskResult;
+
+        if (result.error || !result.answer) {
+          if (result.errorType !== 'canceled') {
+            const toastId = crypto.randomUUID();
+            const title =
+              result.errorType === 'timeout'
+                ? 'Przekroczono limit czasu'
+                : result.errorType === 'network'
+                  ? 'Brak połączenia'
+                  : result.errorType === 'http'
+                    ? 'Błąd webhooka'
+                    : 'Nie udało się wysłać';
+            pushToast({
+              id: toastId,
+              title,
+              message:
+                result.error ||
+                (result.errorType === 'http' && result.status
+                  ? `Webhook zwrócił błąd HTTP ${result.status}.`
+                  : 'Brak odpowiedzi z webhooka.'),
+              tone: 'error',
+              actionLabel: 'Ponów',
+              onAction: () => {
+                dismissToast(toastId);
+                void sendQuestion(payload, { appendUserMessage: false });
+              }
+            });
+          }
+          return;
+        }
+
+        appendAssistantMessage(result.answer, result.sources);
+      } catch {
+        const toastId = crypto.randomUUID();
+        pushToast({
+          id: toastId,
+          title: 'Wystąpił błąd',
+          message: 'Nie udało się połączyć z webhookiem. Spróbuj ponownie.',
+          tone: 'error',
+          actionLabel: 'Ponów',
+          onAction: () => {
+            dismissToast(toastId);
+            void sendQuestion(payload, { appendUserMessage: false });
+          }
+        });
+      } finally {
+        setIsLoading(false);
+        setIsTyping(false);
+        setPendingRequestId(null);
+      }
+    },
+    [appendAssistantMessage, dismissToast, isLoading, isOnline, pushToast]
+  );
+
+  const handleSend = useCallback(async () => {
+    if (!conversationId) {
+      return;
     }
-  }, [conversationId, input, isLoading, isOnline]);
+    await sendQuestion({ question: input, conversationId }, { appendUserMessage: true });
+  }, [conversationId, input, sendQuestion]);
 
   useEffect(() => {
     if (!conversationId) {
@@ -270,61 +477,6 @@ const App = () => {
       inputRef.current?.focus();
       inputRef.current?.setSelectionRange(prompt.length, prompt.length);
     });
-  };
-
-  const handleRetry = async (message: Message) => {
-    if (!message.retryPayload || isLoading) {
-      return;
-    }
-    const { question, conversationId: retryConversationId } = message.retryPayload;
-    const requestId = crypto.randomUUID();
-    setIsLoading(true);
-    setIsTyping(true);
-    setPendingRequestId(requestId);
-    updateMessage(message.id, (prev) => ({
-      ...prev,
-      content: 'Ponawianie zapytania...',
-      isError: false
-    }));
-
-    try {
-      const result = await window.companyAssistant.n8n.ask({
-        question,
-        conversationId: retryConversationId,
-        requestId
-      });
-      if (result.error || !result.answer) {
-        updateMessage(message.id, (prev) => ({
-          ...prev,
-          content: result.error || 'Brak odpowiedzi z webhooka.',
-          sources: result.sources,
-          isError: true,
-          retryPayload: { question, conversationId: retryConversationId },
-          createdAt: new Date().toISOString()
-        }));
-        return;
-      }
-      updateMessage(message.id, (prev) => ({
-        ...prev,
-        content: result.answer ?? '',
-        sources: result.sources,
-        isError: false,
-        retryPayload: undefined,
-        createdAt: new Date().toISOString()
-      }));
-    } catch {
-      updateMessage(message.id, (prev) => ({
-        ...prev,
-        content: 'Wystąpił błąd podczas wysyłania wiadomości.',
-        isError: true,
-        retryPayload: { question, conversationId: retryConversationId },
-        createdAt: new Date().toISOString()
-      }));
-    } finally {
-      setIsLoading(false);
-      setIsTyping(false);
-      setPendingRequestId(null);
-    }
   };
 
   const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -435,34 +587,64 @@ const App = () => {
     await handleSaveSettings(nextSettings);
   };
 
-  const renderSources = (sources?: SourceItem[]) => {
+  const renderSources = (messageId: string, sources?: SourceItem[]) => {
     if (!sources || sources.length === 0) {
       return null;
     }
 
+    const isExpanded = expandedSources.has(messageId);
+
     return (
       <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-slate-200/80">
-        <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">Źródła</div>
-        <ul className="space-y-2">
-          {sources.map((source, index) => {
-            const snippet = source.text?.slice(0, 200);
-            const trimmedSnippet = snippet && source.text && source.text.length > 200 ? `${snippet}…` : snippet;
-            return (
-              <li key={`${source.source}-${index}`} className="space-y-1">
-                <div className="text-slate-200">{source.source}</div>
-                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
-                  {source.chunk !== undefined && source.chunk !== null && (
-                    <span>chunk: {source.chunk}</span>
-                  )}
-                  {source.score !== undefined && source.score !== null && (
-                    <span>score: {Number(source.score).toFixed(3)}</span>
-                  )}
-                </div>
-                {trimmedSnippet && <div className="text-slate-400">{trimmedSnippet}</div>}
-              </li>
-            );
-          })}
-        </ul>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between text-[11px] uppercase tracking-[0.2em] text-slate-400"
+          onClick={() =>
+            setExpandedSources((prev) => {
+              const next = new Set(prev);
+              if (next.has(messageId)) {
+                next.delete(messageId);
+              } else {
+                next.add(messageId);
+              }
+              return next;
+            })
+          }
+        >
+          <span>Źródła</span>
+          <span>{isExpanded ? 'Ukryj' : `Pokaż (${sources.length})`}</span>
+        </button>
+        {isExpanded && (
+          <ul className="mt-2 space-y-2">
+            {sources.map((source, index) => {
+              const legacySource = source as SourceItem & {
+                title?: string;
+                url?: string;
+                snippet?: string;
+              };
+              const title = source.source ?? legacySource.title ?? legacySource.url ?? 'Źródło';
+              const snippetValue = source.text ?? legacySource.snippet ?? '';
+              const snippet = snippetValue.slice(0, 200);
+              const trimmedSnippet =
+                snippet && snippetValue.length > 200 ? `${snippet}…` : snippet || undefined;
+              return (
+                <li key={`${title}-${index}`} className="space-y-1">
+                  <div className="text-slate-200">{title}</div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
+                    {source.chunk !== undefined && source.chunk !== null && (
+                      <span>chunk: {source.chunk}</span>
+                    )}
+                    {source.score !== undefined && source.score !== null && (
+                      <span>score: {Number(source.score).toFixed(3)}</span>
+                    )}
+                    {legacySource.url && <span>{legacySource.url}</span>}
+                  </div>
+                  {trimmedSnippet && <div className="text-slate-400">{trimmedSnippet}</div>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     );
   };
@@ -474,6 +656,26 @@ const App = () => {
     const term = searchTerm.toLowerCase();
     return messages.filter((message) => message.content.toLowerCase().includes(term));
   }, [messages, searchTerm]);
+
+  const filteredConversations = useMemo(() => {
+    const term = conversationSearchTerm.trim().toLowerCase();
+    if (!term) {
+      return conversationIndex;
+    }
+    return conversationIndex.filter((conversation) => {
+      const title = conversation.title?.toLowerCase() ?? '';
+      const preview = conversation.preview?.toLowerCase() ?? '';
+      return title.includes(term) || preview.includes(term);
+    });
+  }, [conversationIndex, conversationSearchTerm]);
+
+  const getConversationTitle = (conversation: ConversationMeta) =>
+    conversation.title?.trim() || 'Nowa rozmowa';
+
+  const getConversationPreview = (conversation: ConversationMeta) => {
+    const preview = conversation.preview?.trim();
+    return preview || 'Brak wiadomości.';
+  };
 
   return (
     <div className="min-h-screen bg-base-900 text-slate-100">
@@ -545,32 +747,88 @@ const App = () => {
 
       <div className="mx-auto flex max-w-6xl gap-6 px-6 py-6">
         <aside className="hidden w-72 flex-col gap-4 rounded-3xl border border-white/10 bg-base-800/60 p-4 shadow-soft lg:flex">
-          <div>
-            <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
-              Rozmowy
-            </div>
-            <div className="space-y-2">
+          <div className="space-y-3">
+            <div className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Rozmowy</div>
+            <input
+              className="w-full rounded-2xl border border-white/10 bg-base-900 px-3 py-2 text-sm text-slate-100 focus:border-accent-400/60 focus:outline-none"
+              placeholder="Szukaj..."
+              value={conversationSearchTerm}
+              onChange={(event) => setConversationSearchTerm(event.target.value)}
+            />
+            <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
               {conversationIndex.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-white/10 p-4 text-xs text-slate-400">
                   Brak zapisanych rozmów.
                 </div>
               )}
-              {conversationIndex.map((conversation) => (
-                <button
+              {conversationIndex.length > 0 && filteredConversations.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-white/10 p-4 text-xs text-slate-400">
+                  Brak rozmów spełniających kryteria wyszukiwania.
+                </div>
+              )}
+              {filteredConversations.map((conversation) => (
+                <div
                   key={conversation.id}
-                  type="button"
-                  className={`w-full rounded-2xl border px-3 py-2 text-left text-sm transition ${
+                  className={`group relative rounded-2xl border transition ${
                     conversation.id === conversationId
                       ? 'border-accent-500/60 bg-accent-500/10 text-white'
                       : 'border-white/10 bg-white/5 text-slate-300 hover:border-accent-400/50 hover:text-white'
                   }`}
-                  onClick={() => handleSelectConversation(conversation.id)}
                 >
-                  <div className="line-clamp-2 text-sm font-medium">{conversation.title}</div>
-                  <div className="mt-1 text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                    {formatTime(conversation.updatedAt)}
+                  <button
+                    type="button"
+                    className="w-full rounded-2xl px-3 py-2 text-left text-sm"
+                    onClick={() => handleSelectConversation(conversation.id)}
+                  >
+                    <div className="line-clamp-1 text-sm font-medium">
+                      {getConversationTitle(conversation)}
+                    </div>
+                    <div className="mt-1 line-clamp-1 text-xs text-slate-400">
+                      {getConversationPreview(conversation)}
+                    </div>
+                    <div className="mt-1 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                      {formatTime(conversation.updatedAt)}
+                    </div>
+                  </button>
+                  <div className="absolute right-2 top-2 flex items-start" data-conversation-menu>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-white/10 bg-base-900/60 px-2 py-1 text-xs text-slate-300 opacity-0 transition hover:text-white group-hover:opacity-100"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpenMenuId((prev) => (prev === conversation.id ? null : conversation.id));
+                      }}
+                      title="Menu rozmowy"
+                    >
+                      ⋮
+                    </button>
+                    {openMenuId === conversation.id && (
+                      <div className="absolute right-0 top-8 w-40 rounded-2xl border border-white/10 bg-base-900 p-2 text-xs text-slate-200 shadow-soft">
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-white/5"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenMenuId(null);
+                            void handleExportConversation(conversation.id);
+                          }}
+                        >
+                          Eksportuj
+                        </button>
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-rose-300 hover:bg-rose-500/10"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleRequestDelete(conversation);
+                          }}
+                        >
+                          Usuń
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -589,6 +847,51 @@ const App = () => {
 
         <main className="flex min-h-[calc(100vh-220px)] flex-1 flex-col gap-6">
           <div className="flex flex-col gap-3 lg:hidden">
+            <div className="rounded-2xl border border-white/10 bg-base-800/60 px-4 py-3">
+              <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                Rozmowy
+              </div>
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-base-900 px-3 py-2 text-sm text-slate-100 focus:border-accent-400/60 focus:outline-none"
+                placeholder="Szukaj..."
+                value={conversationSearchTerm}
+                onChange={(event) => setConversationSearchTerm(event.target.value)}
+              />
+              <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+                {conversationIndex.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-white/10 p-3 text-xs text-slate-400">
+                    Brak zapisanych rozmów.
+                  </div>
+                )}
+                {conversationIndex.length > 0 && filteredConversations.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-white/10 p-3 text-xs text-slate-400">
+                    Brak rozmów spełniających kryteria wyszukiwania.
+                  </div>
+                )}
+                {filteredConversations.map((conversation) => (
+                  <button
+                    key={conversation.id}
+                    type="button"
+                    className={`w-full rounded-2xl border px-3 py-2 text-left text-sm transition ${
+                      conversation.id === conversationId
+                        ? 'border-accent-500/60 bg-accent-500/10 text-white'
+                        : 'border-white/10 bg-white/5 text-slate-300 hover:border-accent-400/50 hover:text-white'
+                    }`}
+                    onClick={() => handleSelectConversation(conversation.id)}
+                  >
+                    <div className="line-clamp-1 text-sm font-medium">
+                      {getConversationTitle(conversation)}
+                    </div>
+                    <div className="mt-1 line-clamp-1 text-xs text-slate-400">
+                      {getConversationPreview(conversation)}
+                    </div>
+                    <div className="mt-1 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                      {formatTime(conversation.updatedAt)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="rounded-2xl border border-white/10 bg-base-800/60 px-4 py-3">
               <div className="mb-2 text-[11px] uppercase tracking-[0.2em] text-slate-400">
                 Szukaj w rozmowie
@@ -707,16 +1010,6 @@ const App = () => {
                   <span>{formatTime(message.createdAt)}</span>
                   {message.role === 'assistant' && (
                     <div className="flex items-center gap-2">
-                      {message.isError && (
-                        <button
-                          type="button"
-                          className="rounded-md border border-white/10 px-2 py-1 text-[10px] font-semibold tracking-[0.2em] text-slate-300 hover:border-accent-400/50 hover:text-white"
-                          onClick={() => handleRetry(message)}
-                          title="Ponów zapytanie"
-                        >
-                          Ponów
-                        </button>
-                      )}
                       <button
                         type="button"
                         className="rounded-md border border-white/10 px-2 py-1 text-[10px] font-semibold tracking-[0.2em] text-slate-300 hover:border-accent-400/50 hover:text-white"
@@ -728,7 +1021,7 @@ const App = () => {
                     </div>
                   )}
                 </div>
-                {message.role === 'assistant' && renderSources(message.sources)}
+                {message.role === 'assistant' && renderSources(message.id, message.sources)}
               </div>
             </div>
           ))}
@@ -784,6 +1077,76 @@ const App = () => {
           </button>
         </div>
       </footer>
+
+      {toasts.length > 0 && (
+        <div className="fixed bottom-24 right-6 z-30 flex w-80 flex-col gap-2">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`rounded-2xl border px-4 py-3 text-sm shadow-soft ${
+                toast.tone === 'error'
+                  ? 'border-rose-500/40 bg-rose-500/10 text-rose-100'
+                  : toast.tone === 'warning'
+                    ? 'border-amber-400/40 bg-amber-400/10 text-amber-100'
+                    : toast.tone === 'success'
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+                      : 'border-white/10 bg-base-800 text-slate-200'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-semibold">{toast.title}</div>
+                  {toast.message && <div className="mt-1 text-xs text-slate-200/80">{toast.message}</div>}
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/10 px-2 py-1 text-xs text-slate-200 hover:text-white"
+                  onClick={() => dismissToast(toast.id)}
+                  title="Zamknij"
+                >
+                  ✕
+                </button>
+              </div>
+              {toast.actionLabel && toast.onAction && (
+                <button
+                  type="button"
+                  className="mt-3 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-white/30 hover:text-white"
+                  onClick={toast.onAction}
+                >
+                  {toast.actionLabel}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-base-800 p-6 text-slate-100 shadow-soft">
+            <h2 className="text-lg font-semibold">Usunąć rozmowę?</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              Ta operacja usuwa lokalne dane rozmowy. Możesz ją cofnąć przez 10 sekund.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm text-slate-300 hover:text-white"
+                onClick={() => setDeleteTarget(null)}
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400"
+                onClick={() => void handleConfirmDelete()}
+              >
+                Usuń
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSettings && (
         <SettingsModal

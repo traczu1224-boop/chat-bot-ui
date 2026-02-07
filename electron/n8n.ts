@@ -21,6 +21,15 @@ type AskOptions = {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const networkErrorCodes = new Set(['ENOTFOUND', 'ECONNREFUSED', 'ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT']);
+
+const classifyNetworkError = (error: unknown) => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = (error as NodeJS.ErrnoException).code;
+  return Boolean(code && networkErrorCodes.has(code));
+};
 
 export const askN8n = async (payload: SendQuestionPayload, options: AskOptions = {}): Promise<AskResult> => {
   const settings = getEffectiveSettings();
@@ -28,7 +37,8 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
 
   if (!isValidWebhookUrl(webhookUrl)) {
     return {
-      error: 'Nieprawidłowy URL webhooka. Ustaw poprawny adres w ustawieniach.'
+      error: 'Nieprawidłowy URL webhooka. Ustaw poprawny adres w ustawieniach.',
+      errorType: 'unknown'
     };
   }
 
@@ -105,7 +115,9 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
         if (!response.ok) {
           if (response.status === 401) {
             return {
-              error: 'Błędny token API. Sprawdź wartość w ustawieniach aplikacji.'
+              error: 'Błędny token API. Sprawdź wartość w ustawieniach aplikacji.',
+              errorType: 'http',
+              status: response.status
             };
           }
           if (response.status >= 500 && attempt < retryDelays.length) {
@@ -113,14 +125,18 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
             continue;
           }
           return {
-            error: 'Serwer zwrócił błąd. Spróbuj ponownie później.'
+            error: 'Serwer zwrócił błąd. Spróbuj ponownie później.',
+            errorType: 'http',
+            status: response.status
           };
         }
 
         if (!data.answer || data.error) {
           return {
             error: data.error || 'Brak odpowiedzi z webhooka. Sprawdź konfigurację.',
-            sources: data.sources ?? []
+            sources: data.sources ?? [],
+            errorType: 'http',
+            status: response.status
           };
         }
 
@@ -132,11 +148,11 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
         if (error instanceof Error && error.name === 'AbortError') {
           throw error;
         }
-        if (attempt < retryDelays.length) {
-          await sleep(retryDelays[attempt]);
-          continue;
-        }
-        throw error;
+      if (attempt < retryDelays.length) {
+        await sleep(retryDelays[attempt]);
+        continue;
+      }
+      throw error;
       }
     }
     return {
@@ -145,16 +161,25 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       if (controller.signal.reason === 'user') {
-        return { error: 'Anulowano wysyłkę na żądanie użytkownika.' };
+        return { error: 'Anulowano wysyłkę na żądanie użytkownika.', errorType: 'canceled' };
       }
       const timeoutSeconds = Math.round(WEBHOOK_TIMEOUT_MS / 1000);
       return {
-        error: `Przekroczono limit czasu (${timeoutSeconds}s). Spróbuj ponownie.`
+        error: `Przekroczono limit czasu (${timeoutSeconds}s). Spróbuj ponownie.`,
+        errorType: 'timeout'
+      };
+    }
+
+    if (classifyNetworkError(error)) {
+      return {
+        error: 'Brak połączenia z siecią lub nie można połączyć z webhookiem.',
+        errorType: 'network'
       };
     }
 
     return {
-      error: 'Brak połączenia z siecią lub nie można połączyć z webhookiem.'
+      error: 'Nie udało się połączyć z webhookiem. Spróbuj ponownie.',
+      errorType: 'unknown'
     };
   } finally {
     clearTimeout(timeout);

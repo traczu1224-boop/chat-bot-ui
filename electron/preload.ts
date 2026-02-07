@@ -18,7 +18,13 @@ contextBridge.exposeInMainWorld('companyAssistant', {
       ipcRenderer.invoke('conversation:save', payload),
     exportTxt: (conversationId: string): Promise<{ saved: boolean }> =>
       ipcRenderer.invoke('conversation:exportTxt', conversationId),
-    list: (): Promise<ConversationMeta[]> => ipcRenderer.invoke('conversation:list')
+    list: (): Promise<ConversationMeta[]> => ipcRenderer.invoke('conversation:list'),
+    softDelete: (conversationId: string): Promise<{ deleted: boolean }> =>
+      ipcRenderer.invoke('conversation:softDelete', conversationId),
+    restore: (conversationId: string): Promise<{ restored: boolean }> =>
+      ipcRenderer.invoke('conversation:restore', conversationId),
+    delete: (conversationId: string): Promise<{ deleted: boolean }> =>
+      ipcRenderer.invoke('conversation:delete', conversationId)
   },
   n8n: {
     ask: (payload: { question: string; conversationId: string; requestId: string }) =>

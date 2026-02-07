@@ -24,6 +24,9 @@ declare global {
         save: (payload: ConversationPayload) => Promise<{ saved: boolean }>;
         exportTxt: (conversationId: string) => Promise<{ saved: boolean }>;
         list: () => Promise<ConversationMeta[]>;
+        softDelete: (conversationId: string) => Promise<{ deleted: boolean }>;
+        restore: (conversationId: string) => Promise<{ restored: boolean }>;
+        delete: (conversationId: string) => Promise<{ deleted: boolean }>;
       };
       n8n: {
         ask: (payload: { question: string; conversationId: string; requestId: string }) => Promise<AskResult>;
