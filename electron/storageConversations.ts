@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { Message } from './types';
+import type { Message } from './types.js';
 
 export const getConversationsDir = () => path.join(app.getPath('userData'), 'conversations');
 

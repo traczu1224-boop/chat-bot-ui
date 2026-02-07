@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ConversationMeta, ConversationPayload, Settings, SettingsState } from './types';
+import type { ConversationMeta, ConversationPayload, Settings, SettingsState } from './types.js';
 
 contextBridge.exposeInMainWorld('companyAssistant', {
   settings: {

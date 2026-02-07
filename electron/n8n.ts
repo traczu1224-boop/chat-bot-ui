@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import * as os from 'node:os';
-import type { AskResult, SendQuestionPayload } from './types';
-import { getEffectiveSettings, getOrCreateDeviceId } from './storage';
+import type { AskResult, SendQuestionPayload } from './types.js';
+import { getEffectiveSettings, getOrCreateDeviceId } from './storage.js';
 
 export const isValidWebhookUrl = (value: string) => {
   if (!value) {
@@ -129,6 +129,9 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
         throw error;
       }
     }
+    return {
+      error: 'Nie udało się uzyskać odpowiedzi z webhooka. Spróbuj ponownie.'
+    };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       if (controller.signal.reason === 'user') {
