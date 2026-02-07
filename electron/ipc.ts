@@ -5,8 +5,11 @@ import type { ConversationPayload, Settings } from './types.js';
 import { askN8n, isValidWebhookUrl } from './n8n.js';
 import {
   conversationExists,
+  deleteConversation,
   formatConversationTxt,
   readConversation,
+  restoreConversation,
+  softDeleteConversation,
   writeConversation
 } from './storageConversations.js';
 import {
@@ -17,6 +20,7 @@ import {
   getOrCreateDeviceId,
   getSettings,
   isWebhookLocked,
+  removeConversationIndex,
   saveSettings,
   setLastConversationId,
   upsertConversationIndex
@@ -38,6 +42,25 @@ const deriveConversationTitle = (messages: ConversationPayload['messages']) => {
   }
   const words = firstUser.content.trim().split(/\s+/).slice(0, 8).join(' ');
   return words || 'Nowa rozmowa';
+};
+
+const deriveConversationPreview = (messages: ConversationPayload['messages']) => {
+  const lastMessage = messages[messages.length - 1];
+  if (!lastMessage) {
+    return '';
+  }
+  return lastMessage.content.replace(/\s+/g, ' ').trim().slice(0, 140);
+};
+
+const buildConversationMeta = (conversationId: string, messages: ConversationPayload['messages']) => {
+  const lastMessage = messages[messages.length - 1];
+  const updatedAt = lastMessage?.createdAt ?? new Date().toISOString();
+  return {
+    id: conversationId,
+    title: deriveConversationTitle(messages),
+    updatedAt,
+    preview: deriveConversationPreview(messages)
+  };
 };
 
 export const registerIpcHandlers = () => {
@@ -66,22 +89,14 @@ export const registerIpcHandlers = () => {
     const lastConversationId = getLastConversationId();
     if (lastConversationId && (await conversationExists(lastConversationId))) {
       const messages = await readConversation(lastConversationId);
-      upsertConversationIndex({
-        id: lastConversationId,
-        title: deriveConversationTitle(messages),
-        updatedAt: new Date().toISOString()
-      });
+      upsertConversationIndex(buildConversationMeta(lastConversationId, messages));
       return { conversationId: lastConversationId, messages };
     }
 
     const conversationId = randomUUID();
     setLastConversationId(conversationId);
     const payload = await ensureConversation(conversationId);
-    upsertConversationIndex({
-      id: conversationId,
-      title: deriveConversationTitle(payload.messages),
-      updatedAt: new Date().toISOString()
-    });
+    upsertConversationIndex(buildConversationMeta(conversationId, payload.messages));
     return payload;
   });
 
@@ -89,37 +104,53 @@ export const registerIpcHandlers = () => {
     const conversationId = randomUUID();
     setLastConversationId(conversationId);
     const payload = await ensureConversation(conversationId);
-    upsertConversationIndex({
-      id: conversationId,
-      title: deriveConversationTitle(payload.messages),
-      updatedAt: new Date().toISOString()
-    });
+    upsertConversationIndex(buildConversationMeta(conversationId, payload.messages));
     return payload;
   });
 
   ipcMain.handle('conversation:load', async (_event, conversationId: string) => {
     const messages = await readConversation(conversationId);
     setLastConversationId(conversationId);
-    upsertConversationIndex({
-      id: conversationId,
-      title: deriveConversationTitle(messages),
-      updatedAt: new Date().toISOString()
-    });
+    upsertConversationIndex(buildConversationMeta(conversationId, messages));
     return { conversationId, messages };
   });
 
   ipcMain.handle('conversation:save', async (_event, payload: ConversationPayload) => {
     setLastConversationId(payload.conversationId);
     await writeConversation(payload.conversationId, payload.messages);
-    upsertConversationIndex({
-      id: payload.conversationId,
-      title: deriveConversationTitle(payload.messages),
-      updatedAt: new Date().toISOString()
-    });
+    upsertConversationIndex(buildConversationMeta(payload.conversationId, payload.messages));
     return { saved: true };
   });
 
   ipcMain.handle('conversation:list', () => getConversationIndex());
+
+  ipcMain.handle('conversation:softDelete', async (_event, conversationId: string) => {
+    const deleted = await softDeleteConversation(conversationId);
+    removeConversationIndex(conversationId);
+    if (getLastConversationId() === conversationId) {
+      setLastConversationId('');
+    }
+    return { deleted };
+  });
+
+  ipcMain.handle('conversation:restore', async (_event, conversationId: string) => {
+    const restored = await restoreConversation(conversationId);
+    if (restored) {
+      const messages = await readConversation(conversationId);
+      upsertConversationIndex(buildConversationMeta(conversationId, messages));
+      setLastConversationId(conversationId);
+    }
+    return { restored };
+  });
+
+  ipcMain.handle('conversation:delete', async (_event, conversationId: string) => {
+    await deleteConversation(conversationId);
+    removeConversationIndex(conversationId);
+    if (getLastConversationId() === conversationId) {
+      setLastConversationId('');
+    }
+    return { deleted: true };
+  });
 
   ipcMain.handle('conversation:exportTxt', async (_event, conversationId: string) => {
     const messages = await readConversation(conversationId);

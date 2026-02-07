@@ -1,4 +1,4 @@
-const DEFAULT_WEBHOOK_TIMEOUT_MS = 120000;
+const DEFAULT_WEBHOOK_TIMEOUT_MS = 90000;
 
 const envWebhookTimeout = Number.parseInt(process.env.N8N_WEBHOOK_TIMEOUT_MS ?? '', 10);
 

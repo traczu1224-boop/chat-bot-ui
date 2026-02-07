@@ -6,6 +6,7 @@ export type ConversationMeta = {
   id: string;
   title: string;
   updatedAt: string;
+  preview?: string | null;
 };
 
 type StoreSchema = {
@@ -76,4 +77,9 @@ export const upsertConversationIndex = (meta: ConversationMeta, limit = 10) => {
   const existing = getConversationIndex().filter((item) => item.id !== meta.id);
   const next = [meta, ...existing].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   store.set('conversationsIndex', next.slice(0, limit));
+};
+
+export const removeConversationIndex = (conversationId: string) => {
+  const next = getConversationIndex().filter((item) => item.id !== conversationId);
+  store.set('conversationsIndex', next);
 };

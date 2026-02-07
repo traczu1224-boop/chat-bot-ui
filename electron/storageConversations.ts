@@ -4,13 +4,29 @@ import * as path from 'node:path';
 import type { Message } from './types.js';
 
 export const getConversationsDir = () => path.join(app.getPath('userData'), 'conversations');
+export const getTrashDir = () => path.join(getConversationsDir(), '.trash');
 
 const ensureConversationsDir = async () => {
   await fs.mkdir(getConversationsDir(), { recursive: true });
 };
 
+const ensureTrashDir = async () => {
+  await ensureConversationsDir();
+  await fs.mkdir(getTrashDir(), { recursive: true });
+};
+
 const getConversationFilePath = (conversationId: string) =>
   path.join(getConversationsDir(), `${conversationId}.json`);
+
+const getTrashFilePath = (conversationId: string) => path.join(getTrashDir(), `${conversationId}.json`);
+
+const removeFileIfExists = async (filePath: string) => {
+  try {
+    await fs.unlink(filePath);
+  } catch {
+    // ignore
+  }
+};
 
 export const conversationExists = async (conversationId: string) => {
   try {
@@ -36,6 +52,40 @@ export const writeConversation = async (conversationId: string, messages: Messag
   await ensureConversationsDir();
   const filePath = getConversationFilePath(conversationId);
   await fs.writeFile(filePath, JSON.stringify(messages, null, 2), 'utf-8');
+};
+
+export const softDeleteConversation = async (conversationId: string) => {
+  await ensureTrashDir();
+  const filePath = getConversationFilePath(conversationId);
+  const trashPath = getTrashFilePath(conversationId);
+  try {
+    await removeFileIfExists(trashPath);
+    await fs.rename(filePath, trashPath);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const restoreConversation = async (conversationId: string) => {
+  await ensureConversationsDir();
+  const filePath = getConversationFilePath(conversationId);
+  const trashPath = getTrashFilePath(conversationId);
+  try {
+    await fs.rename(trashPath, filePath);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const deleteConversation = async (conversationId: string) => {
+  await ensureTrashDir();
+  const filePath = getConversationFilePath(conversationId);
+  const trashPath = getTrashFilePath(conversationId);
+  await removeFileIfExists(filePath);
+  await removeFileIfExists(trashPath);
+  return true;
 };
 
 export const formatConversationTxt = (conversationId: string, messages: Message[]) => {
