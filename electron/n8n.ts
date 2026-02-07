@@ -58,6 +58,7 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
   if (options.signal) {
     options.signal.addEventListener('abort', () => controller.abort('user'), { once: true });
   }
+  let startedAt = Date.now();
 
   try {
     const token = settings.apiToken;
@@ -73,6 +74,7 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
       });
 
       try {
+        startedAt = Date.now();
         const response = await fetch(webhookUrl, {
           method: 'POST',
           headers: {
@@ -156,5 +158,8 @@ export const askN8n = async (payload: SendQuestionPayload, options: AskOptions =
     };
   } finally {
     clearTimeout(timeout);
+    const durationMs = Date.now() - startedAt;
+    const timedOut = controller.signal.aborted && controller.signal.reason === 'timeout';
+    console.info('[n8n] zakończono zapytanie', { durationMs, timedOut });
   }
 };
